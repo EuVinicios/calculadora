@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeilãoInvest Pro | Calculadora de Viabilidade</title>
+    
+    <!-- React e ReactDOM via CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel para traduzir o código React no navegador -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS para o design -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Configuração do Tailwind -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+        /* Animações suaves */
+        .animate-in { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo } = React;
+
+        // --- ÍCONES SVG (Substituindo Lucide para versão Standalone) ---
+        const Icons = {
+            Calculator: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>,
+            Building2: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg>,
+            Car: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>,
+            TrendingUp: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>,
+            Hammer: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 12-8.5 8.5c-.83.83-2.17.83-3 0 0 0 0 0 0 0a2.12 2.12 0 0 1 0-3L12 9"/><path d="M17.64 15 22 10.64"/><path d="m20.91 11.7-1.25-1.25c-.6-.6-.93-1.4-.93-2.25V7.86c0-.55-.45-1-1-1H14.14c-.83 0-1.64.32-2.25.92L9.64 10"/><path d="m17.38 5.38 3.12 3.12"/></svg>,
+            BarChart3: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>,
+            ChevronDown: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        };
+
+        const App = () => {
+            const [activeTab, setActiveTab] = useState('imoveis');
+            
+            // --- STATE FOR REAL ESTATE (IMÓVEIS) ---
+            const [imovelData, setImovelData] = useState({
+                endereco: '',
+                tipo: 'apartamento',
+                metragem: '',
+                quartos: '',
+                banheiros: '',
+                vagas: '',
+                conservacao: 'bom',
+                documentacao: 'regular',
+                tipoLeilao: 'extrajudicial',
+                ocupacao: 'livre',
+                dataLeilao: '',
+                valorAvaliacao: '',
+                lanceMinimo1: '',
+                lanceMinimo2: '',
+                valorMercado: '',
+                tempoVenda: 6,
+                demanda: 'media',
+                estrategia: 'venda',
+                valorAluguel: '',
+                lancePretendido: '',
+                taxaItbi: 3.0,
+                registroCartorio: 2850,
+                certidoesDocumentos: 500,
+                advogado: 1900,
+                vistoriaTecnica: 800,
+                seguroGarantia: 950,
+                necessitaReforma: false,
+                tipoReforma: 'basica',
+                custoM2: 200,
+                tempoReforma: 3,
+                usarFinanciamento: false,
+                entradaPercent: 20,
+                taxaJuros: 10.5,
+                prazoFinanciamento: 20,
+                corretagemPercent: 6,
+                publicidade: 2000,
+                tipoPessoa: 'pf'
+            });
+
+            // --- STATE FOR VEHICLES (VEÍCULOS) ---
+            const [veiculoData, setVeiculoData] = useState({
+                marcaModelo: '',
+                anoFabricacao: '',
+                anoModelo: '',
+                combustivel: 'flex',
+                quilometragem: '',
+                cor: '',
+                conservacao: 'bom',
+                documentacao: 'regular',
+                tipoLeilao: 'extrajudicial',
+                valorFipe: '',
+                lanceMinimo: '',
+                dataLeilao: '',
+                situacao: 'livre',
+                valorMercado: '',
+                tempoVenda: 3,
+                demanda: 'media',
+                estrategia: 'venda',
+                valorAluguel: '',
+                lancePretendido: '',
+                necessitaReparo: false,
+                tipoReparo: 'basico',
+                custoReparo: 2000,
+                tempoReparo: 15,
+                despesaAdministrativa: 1700,
+                taxaTransferencia: 400,
+                vistoriaDocumentos: 500,
+                despachante: 0,
+                usarFinanciamento: false,
+                entradaPercent: 30,
+                taxaJuros: 18.0,
+                prazoFinanciamento: 5,
+                corretagemPercent: 3,
+                publicidade: 800,
+                tipoPessoa: 'pf'
+            });
+
+            // --- HANDLERS ---
+            const handleImovelChange = (e) => {
+                const { name, value, type, checked } = e.target;
+                setImovelData(prev => ({
+                    ...prev,
+                    [name]: type === 'checkbox' ? checked : (type === 'number' && value !== '' ? parseFloat(value) : value)
+                }));
+            };
+
+            const handleVeiculoChange = (e) => {
+                const { name, value, type, checked } = e.target;
+                setVeiculoData(prev => ({
+                    ...prev,
+                    [name]: type === 'checkbox' ? checked : (type === 'number' && value !== '' ? parseFloat(value) : value)
+                }));
+            };
+
+            // --- CALCULATIONS HELPERS ---
+            const formatCurrency = (value) => {
+                if (!value && value !== 0) return 'R$ 0,00';
+                return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+            };
+
+            const parseNum = (val) => Number(val) || 0;
+
+            const calculateFinancing = (principal, entryPercent, rateYear, years) => {
+                const entry = (principal * entryPercent) / 100;
+                const financed = principal - entry;
+                const rateMonth = (rateYear / 100) / 12;
+                const months = years * 12;
+                let payment = 0;
+                if (rateMonth > 0 && months > 0) {
+                    payment = financed * (rateMonth * Math.pow(1 + rateMonth, months)) / (Math.pow(1 + rateMonth, months) - 1);
+                }
+                return { entry, financed, payment };
+            };
+
+            const calculateTax = (gain, type) => {
+                if (gain <= 0) return 0;
+                return gain * (type === 'pf' ? 0.15 : 0.225);
+            };
+
+            // --- MEMOIZED RESULTS (IMÓVEIS) ---
+            const imovelResults = useMemo(() => {
+                const d = imovelData;
+                const lance = parseNum(d.lancePretendido);
+                
+                const comissao = lance * 0.05;
+                const itbi = lance * (d.taxaItbi / 100);
+                const totalArrematacao = comissao + itbi + parseNum(d.registroCartorio) + parseNum(d.certidoesDocumentos) + parseNum(d.advogado) + parseNum(d.vistoriaTecnica) + parseNum(d.seguroGarantia);
+
+                let custoReforma = 0;
+                if (d.necessitaReforma) {
+                    const fator = d.tipoReforma === 'basica' ? 1 : d.tipoReforma === 'intermediaria' ? 1.3 : 1.6;
+                    custoReforma = parseNum(d.metragem) * parseNum(d.custoM2) * fator;
+                }
+
+                let investimentoInicial = lance + totalArrematacao + custoReforma;
+                let prestacao = 0;
+                let saldoDevedor = 0;
+
+                if (d.usarFinanciamento) {
+                    const fin = calculateFinancing(lance, d.entradaPercent, d.taxaJuros, d.prazoFinanciamento);
+                    investimentoInicial = fin.entry + totalArrematacao + custoReforma;
+                    prestacao = fin.payment;
+                    
+                    const taxaMensal = (d.taxaJuros / 100) / 12;
+                    saldoDevedor = fin.financed;
+                    for (let i = 0; i < d.tempoVenda; i++) {
+                        saldoDevedor = saldoDevedor * (1 + taxaMensal) - prestacao;
+                    }
+                }
+
+                const valorVendaEstimado = parseNum(d.valorMercado);
+                const custosVenda = (valorVendaEstimado * d.corretagemPercent / 100) + parseNum(d.publicidade);
+                
+                let lucroLiquido = 0;
+                let roi = 0;
+                
+                if (d.estrategia === 'venda') {
+                    const custoTotalBase = lance + totalArrematacao + custoReforma + custosVenda;
+                    const ganhoCapital = valorVendaEstimado - custoTotalBase;
+                    const impostos = calculateTax(ganhoCapital, d.tipoPessoa);
+                    
+                    const recebidoLiquido = valorVendaEstimado - custosVenda - impostos - (d.usarFinanciamento ? saldoDevedor : 0);
+                    
+                    lucroLiquido = recebidoLiquido - investimentoInicial - (d.usarFinanciamento ? (prestacao * d.tempoVenda) : 0);
+                    
+                    const investimentoTotalConsiderado = investimentoInicial + (d.usarFinanciamento ? (prestacao * d.tempoVenda) : 0);
+                    roi = investimentoTotalConsiderado > 0 ? (lucroLiquido / investimentoTotalConsiderado) * 100 : 0;
+                } else {
+                    const rendaAnual = parseNum(d.valorAluguel) * 12;
+                    lucroLiquido = rendaAnual;
+                    roi = investimentoInicial > 0 ? (rendaAnual / investimentoInicial) * 100 : 0;
+                }
+
+                let classificacao = 'Inviável';
+                let corClassificacao = 'text-red-600 bg-red-100';
+                if (roi > 50) { classificacao = 'Excelente'; corClassificacao = 'text-green-700 bg-green-100'; }
+                else if (roi > 30) { classificacao = 'Muito Bom'; corClassificacao = 'text-emerald-600 bg-emerald-100'; }
+                else if (roi > 15) { classificacao = 'Bom'; corClassificacao = 'text-blue-600 bg-blue-100'; }
+                else if (roi > 0) { classificacao = 'Atenção'; corClassificacao = 'text-yellow-600 bg-yellow-100'; }
+
+                return {
+                    investimentoInicial,
+                    totalArrematacao,
+                    custoReforma,
+                    custosVenda,
+                    lucroLiquido,
+                    roi,
+                    classificacao,
+                    corClassificacao,
+                    valorVendaEstimado,
+                    prestacao,
+                    tempoTotal: parseNum(d.tempoVenda) + parseNum(d.tempoReforma)
+                };
+            }, [imovelData]);
+
+            // --- MEMOIZED RESULTS (VEÍCULOS) ---
+            const veiculoResults = useMemo(() => {
+                const d = veiculoData;
+                const lance = parseNum(d.lancePretendido);
+
+                const comissao = lance * 0.05;
+                const totalArrematacao = comissao + parseNum(d.despesaAdministrativa) + parseNum(d.taxaTransferencia) + parseNum(d.vistoriaDocumentos) + parseNum(d.despachante);
+
+                let custoReparo = d.necessitaReparo ? parseNum(d.custoReparo) : 0;
+
+                let investimentoInicial = lance + totalArrematacao + custoReparo;
+                let prestacao = 0;
+                let saldoDevedor = 0;
+
+                if (d.usarFinanciamento) {
+                    const fin = calculateFinancing(lance, d.entradaPercent, d.taxaJuros, d.prazoFinanciamento);
+                    investimentoInicial = fin.entry + totalArrematacao + custoReparo;
+                    prestacao = fin.payment;
+                    
+                    const taxaMensal = (d.taxaJuros / 100) / 12;
+                    saldoDevedor = fin.financed;
+                    for (let i = 0; i < d.tempoVenda; i++) {
+                        saldoDevedor = saldoDevedor * (1 + taxaMensal) - prestacao;
+                    }
+                }
+
+                const valorVendaEstimado = parseNum(d.valorMercado) * 0.95;
+                const custosVenda = (valorVendaEstimado * d.corretagemPercent / 100) + parseNum(d.publicidade);
+
+                let lucroLiquido = 0;
+                let roi = 0;
+
+                if (d.estrategia === 'venda') {
+                    const custoTotalBase = lance + totalArrematacao + custoReparo + custosVenda;
+                    const ganhoCapital = valorVendaEstimado - custoTotalBase;
+                    const impostos = calculateTax(ganhoCapital, d.tipoPessoa);
+
+                    const recebidoLiquido = valorVendaEstimado - custosVenda - impostos - (d.usarFinanciamento ? saldoDevedor : 0);
+                    
+                    lucroLiquido = recebidoLiquido - investimentoInicial - (d.usarFinanciamento ? (prestacao * d.tempoVenda) : 0);
+                    const investimentoTotalConsiderado = investimentoInicial + (d.usarFinanciamento ? (prestacao * d.tempoVenda) : 0);
+                    roi = investimentoTotalConsiderado > 0 ? (lucroLiquido / investimentoTotalConsiderado) * 100 : 0;
+                } else {
+                    const rendaAnual = parseNum(d.valorAluguel) * 12;
+                    lucroLiquido = rendaAnual;
+                    roi = investimentoInicial > 0 ? (rendaAnual / investimentoInicial) * 100 : 0;
+                }
+
+                let classificacao = 'Inviável';
+                let corClassificacao = 'text-red-600 bg-red-100';
+                if (roi > 40) { classificacao = 'Excelente'; corClassificacao = 'text-green-700 bg-green-100'; }
+                else if (roi > 20) { classificacao = 'Muito Bom'; corClassificacao = 'text-emerald-600 bg-emerald-100'; }
+                else if (roi > 10) { classificacao = 'Bom'; corClassificacao = 'text-blue-600 bg-blue-100'; }
+                else if (roi > 0) { classificacao = 'Atenção'; corClassificacao = 'text-yellow-600 bg-yellow-100'; }
+
+                return {
+                    investimentoInicial,
+                    totalArrematacao,
+                    custoReparo,
+                    custosVenda,
+                    lucroLiquido,
+                    roi,
+                    classificacao,
+                    corClassificacao,
+                    valorVendaEstimado,
+                    prestacao,
+                    tempoTotal: (parseNum(d.tempoReparo)/30) + parseNum(d.tempoVenda)
+                };
+            }, [veiculoData]);
+
+            // --- COMPONENTS ---
+            const SectionHeader = ({ title, icon: Icon }) => (
+                <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-200 text-gray-800">
+                    {Icon && <span className="text-indigo-600"><Icon /></span>}
+                    <h3 className="font-bold text-lg">{title}</h3>
+                </div>
+            );
+
+            const InputGroup = ({ label, id, children, required, subtext }) => (
+                <div className="flex flex-col gap-1">
+                    <label htmlFor={id} className="text-sm font-medium text-gray-700 flex justify-between">
+                        <span>{label} {required && <span className="text-red-500">*</span>}</span>
+                    </label>
+                    {children}
+                    {subtext && <span className="text-xs text-gray-500">{subtext}</span>}
+                </div>
+            );
+
+            const CurrencyInput = ({ value, onChange, name, placeholder, readOnly = false }) => (
+                <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span className="text-gray-500 sm:text-sm">R$</span>
+                    </div>
+                    <input
+                        type="number"
+                        name={name}
+                        value={value}
+                        onChange={onChange}
+                        placeholder={placeholder}
+                        readOnly={readOnly}
+                        className={`block w-full pl-10 pr-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md border ${readOnly ? 'bg-gray-100 text-gray-500' : 'bg-white'}`}
+                    />
+                </div>
+            );
+
+            const renderImoveisForm = () => (
+                <div className="space-y-8 animate-in">
+                    <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                        <SectionHeader title="Dados do Imóvel" icon={Icons.Building2} />
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <InputGroup label="Endereço" id="endereco">
+                                <input type="text" name="endereco" value={imovelData.endereco} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border" placeholder="Logradouro, Bairro..." />
+                            </InputGroup>
+                            <InputGroup label="Tipo" id="tipo">
+                                <select name="tipo" value={imovelData.tipo} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border">
+                                    <option value="apartamento">Apartamento</option>
+                                    <option value="casa">Casa</option>
+                                    <option value="comercial">Comercial</option>
+                                    <option value="terreno">Terreno</option>
+                                </select>
+                            </InputGroup>
+                            <div className="grid grid-cols-2 gap-4">
+                                <InputGroup label="Área (m²)" id="metragem">
+                                    <input type="number" name="metragem" value={imovelData.metragem} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border" />
+                                </InputGroup>
+                                <InputGroup label="Quartos" id="quartos">
+                                    <input type="number" name="quartos" value={imovelData.quartos} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border" />
+                                </InputGroup>
+                            </div>
+                            <InputGroup label="Conservação" id="conservacao">
+                                <select name="conservacao" value={imovelData.conservacao} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border">
+                                    <option value="excelente">Excelente</option>
+                                    <option value="bom">Bom</option>
+                                    <option value="regular">Regular</option>
+                                    <option value="ruim">Ruim</option>
+                                </select>
+                            </InputGroup>
+                            <InputGroup label="Valor Avaliação" id="valorAvaliacao">
+                                <CurrencyInput name="valorAvaliacao" value={imovelData.valorAvaliacao} onChange={handleImovelChange} />
+                            </InputGroup>
+                        </div>
+                    </section>
+
+                    <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                        <SectionHeader title="Valores e Estratégia" icon={Icons.TrendingUp} />
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <InputGroup label="Valor de Mercado" id="valorMercado" required>
+                                <CurrencyInput name="valorMercado" value={imovelData.valorMercado} onChange={handleImovelChange} />
+                            </InputGroup>
+                            
+                            <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-100 col-span-1 md:col-span-2 lg:col-span-2">
+                                <InputGroup label="SEU LANCE MÁXIMO PRETENDIDO" id="lancePretendido" required>
+                                    <CurrencyInput name="lancePretendido" value={imovelData.lancePretendido} onChange={handleImovelChange} />
+                                </InputGroup>
+                                <div className="flex gap-4 mt-2 text-xs text-indigo-700">
+                                    <span>Desconto Mercado: {imovelData.valorMercado && imovelData.lancePretendido ? ((imovelData.valorMercado - imovelData.lancePretendido)/imovelData.valorMercado * 100).toFixed(1) + '%' : '0%'}</span>
+                                    <span>Margem Bruta: {imovelData.valorMercado && imovelData.lancePretendido ? (imovelData.valorMercado - imovelData.lancePretendido).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}) : 'R$ 0'}</span>
+                                </div>
+                            </div>
+
+                            <InputGroup label="Estratégia" id="estrategia">
+                                <select name="estrategia" value={imovelData.estrategia} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border">
+                                    <option value="venda">Revenda</option>
+                                    <option value="aluguel">Aluguel (Renda)</option>
+                                </select>
+                            </InputGroup>
+
+                            {imovelData.estrategia === 'aluguel' && (
+                                <InputGroup label="Valor Aluguel Mensal" id="valorAluguel">
+                                    <CurrencyInput name="valorAluguel" value={imovelData.valorAluguel} onChange={handleImovelChange} />
+                                </InputGroup>
+                            )}
+
+                            <div className="col-span-full border-t border-gray-100 pt-4 mt-2">
+                                <label className="flex items-center gap-2 cursor-pointer mb-4">
+                                    <input type="checkbox" name="necessitaReforma" checked={imovelData.necessitaReforma} onChange={handleImovelChange} className="w-4 h-4 text-indigo-600 rounded" />
+                                    <span className="font-medium text-gray-700">Necessita Reforma?</span>
+                                </label>
+                                
+                                {imovelData.necessitaReforma && (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-50 p-4 rounded-lg">
+                                        <InputGroup label="Nível">
+                                            <select name="tipoReforma" value={imovelData.tipoReforma} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md p-2 border">
+                                                <option value="basica">Básica (Pintura/Reparos)</option>
+                                                <option value="intermediaria">Média (Pisos/Banheiro)</option>
+                                                <option value="completa">Completa (Estrutural)</option>
+                                            </select>
+                                        </InputGroup>
+                                        <InputGroup label="Custo Est. (R$/m²)">
+                                            <CurrencyInput name="custoM2" value={imovelData.custoM2} onChange={handleImovelChange} />
+                                        </InputGroup>
+                                        <InputGroup label="Duração (meses)">
+                                            <input type="number" name="tempoReforma" value={imovelData.tempoReforma} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md p-2 border" />
+                                        </InputGroup>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </section>
+
+                    <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                        <details className="group">
+                            <summary className="flex cursor-pointer items-center justify-between font-medium text-gray-900 list-none">
+                                <SectionHeader title="Custos Detalhados (Editáveis)" icon={Icons.Calculator} />
+                                <span className="transition group-open:rotate-180"><Icons.ChevronDown /></span>
+                            </summary>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 animate-in">
+                                <InputGroup label="ITBI (%)">
+                                    <input type="number" name="taxaItbi" value={imovelData.taxaItbi} onChange={handleImovelChange} className="w-full border p-2 rounded" />
+                                </InputGroup>
+                                <InputGroup label="Registro (R$)">
+                                    <CurrencyInput name="registroCartorio" value={imovelData.registroCartorio} onChange={handleImovelChange} />
+                                </InputGroup>
+                                <InputGroup label="Advogado (R$)">
+                                    <CurrencyInput name="advogado" value={imovelData.advogado} onChange={handleImovelChange} />
+                                </InputGroup>
+                                <InputGroup label="Outros Débitos">
+                                    <CurrencyInput name="certidoesDocumentos" value={imovelData.certidoesDocumentos} onChange={handleImovelChange} placeholder="Valor Total" />
+                                </InputGroup>
+                            </div>
+                        </details>
+                    </section>
+
+                    <section className="bg-slate-900 text-white p-6 rounded-xl shadow-lg mt-8">
+                        <div className="flex items-center gap-3 mb-6">
+                            <span className="text-emerald-400"><Icons.BarChart3 /></span>
+                            <h2 className="text-xl font-bold">Análise de Viabilidade</h2>
+                            <span className={`ml-auto px-4 py-1 rounded-full text-sm font-bold uppercase tracking-wider ${imovelResults.corClassificacao}`}>
+                                {imovelResults.classificacao}
+                            </span>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                            <div className="bg-slate-800 p-4 rounded-lg">
+                                <p className="text-slate-400 text-sm mb-1">Investimento Inicial (Caixa)</p>
+                                <p className="text-2xl font-bold text-white">{formatCurrency(imovelResults.investimentoInicial)}</p>
+                            </div>
+                            <div className="bg-slate-800 p-4 rounded-lg">
+                                <p className="text-slate-400 text-sm mb-1">Lucro Líquido Projetado</p>
+                                <p className={`text-2xl font-bold ${imovelResults.lucroLiquido > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                    {formatCurrency(imovelResults.lucroLiquido)}
+                                </p>
+                            </div>
+                            <div className="bg-slate-800 p-4 rounded-lg">
+                                <p className="text-slate-400 text-sm mb-1">ROI (Retorno)</p>
+                                <p className={`text-2xl font-bold ${imovelResults.roi > 15 ? 'text-emerald-400' : 'text-yellow-400'}`}>
+                                    {imovelResults.roi.toFixed(2)}%
+                                </p>
+                            </div>
+                            <div className="bg-slate-800 p-4 rounded-lg">
+                                <p className="text-slate-400 text-sm mb-1">Tempo do Projeto</p>
+                                <p className="text-2xl font-bold text-white">{imovelResults.tempoTotal.toFixed(1)} meses</p>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            );
+
+            const renderVeiculosForm = () => (
+                <div className="space-y-8 animate-in">
+                    <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                        <SectionHeader title="Dados do Veículo" icon={Icons.Car} />
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <InputGroup label="Marca/Modelo" id="marcaModelo">
+                                <input type="text" name="marcaModelo" value={veiculoData.marcaModelo} onChange={handleVeiculoChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border" placeholder="Ex: Honda Civic..." />
+                            </InputGroup>
+                            <div className="grid grid-cols-2 gap-4">
+                                <InputGroup label="Ano Fab." id="anoFabricacao">
+                                    <input type="number" name="anoFabricacao" value={veiculoData.anoFabricacao} onChange={handleVeiculoChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border" />
+                                </InputGroup>
+                                <InputGroup label="KM" id="quilometragem">
+                                    <input type="number" name="quilometragem" value={veiculoData.quilometragem} onChange={handleVeiculoChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border" />
+                                </InputGroup>
+                            </div>
+                            <InputGroup label="Tabela FIPE" id="valorFipe">
+                                <CurrencyInput name="valorFipe" value={veiculoData.valorFipe} onChange={handleVeiculoChange} />
+                            </InputGroup>
+                            <InputGroup label="Valor de Revenda Real" id="valorMercado" required subtext="Pesquise na WebMotors/OLX">
+                                <CurrencyInput name="valorMercado" value={veiculoData.valorMercado} onChange={handleVeiculoChange} />
+                            </InputGroup>
+                            
+                            <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-100 col-span-1 md:col-span-2 lg:col-span-2">
+                                <InputGroup label="LANCE MÁXIMO (TETO)" id="lancePretendido" required>
+                                    <CurrencyInput name="lancePretendido" value={veiculoData.lancePretendido} onChange={handleVeiculoChange} />
+                                </InputGroup>
+                                <div className="flex gap-4 mt-2 text-xs text-indigo-700">
+                                    <span>Desconto FIPE: {veiculoData.valorFipe && veiculoData.lancePretendido ? ((veiculoData.valorFipe - veiculoData.lancePretendido)/veiculoData.valorFipe * 100).toFixed(1) + '%' : '0%'}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                        <SectionHeader title="Custos e Reparos" icon={Icons.Hammer} />
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="col-span-full mb-2">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" name="necessitaReparo" checked={veiculoData.necessitaReparo} onChange={handleVeiculoChange} className="w-4 h-4 text-indigo-600 rounded" />
+                                    <span className="font-medium text-gray-700">Necessita Mecânica/Funilaria?</span>
+                                </label>
+                            </div>
+                            {veiculoData.necessitaReparo && (
+                                <>
+                                    <InputGroup label="Custo Estimado">
+                                        <CurrencyInput name="custoReparo" value={veiculoData.custoReparo} onChange={handleVeiculoChange} />
+                                    </InputGroup>
+                                    <InputGroup label="Tempo Parado (dias)">
+                                        <input type="number" name="tempoReparo" value={veiculoData.tempoReparo} onChange={handleVeiculoChange} className="w-full border p-2 rounded" />
+                                    </InputGroup>
+                                </>
+                            )}
+                            <InputGroup label="Despesas Pátio/Admin">
+                                <CurrencyInput name="despesaAdministrativa" value={veiculoData.despesaAdministrativa} onChange={handleVeiculoChange} />
+                            </InputGroup>
+                            <InputGroup label="Documentação/IPVA">
+                                <CurrencyInput name="vistoriaDocumentos" value={veiculoData.vistoriaDocumentos} onChange={handleVeiculoChange} />
+                            </InputGroup>
+                        </div>
+                    </section>
+
+                    <section className="bg-slate-900 text-white p-6 rounded-xl shadow-lg mt-8">
+                        <div className="flex items-center gap-3 mb-6">
+                            <span className="text-emerald-400"><Icons.BarChart3 /></span>
+                            <h2 className="text-xl font-bold">Viabilidade do Veículo</h2>
+                            <span className={`ml-auto px-4 py-1 rounded-full text-sm font-bold uppercase tracking-wider ${veiculoResults.corClassificacao}`}>
+                                {veiculoResults.classificacao}
+                            </span>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                            <div className="bg-slate-800 p-4 rounded-lg">
+                                <p className="text-slate-400 text-sm mb-1">Custo Total (Lance+Taxas)</p>
+                                <p className="text-2xl font-bold text-white">{formatCurrency(veiculoResults.investimentoInicial)}</p>
+                            </div>
+                            <div className="bg-slate-800 p-4 rounded-lg">
+                                <p className="text-slate-400 text-sm mb-1">Lucro Líquido</p>
+                                <p className={`text-2xl font-bold ${veiculoResults.lucroLiquido > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                    {formatCurrency(veiculoResults.lucroLiquido)}
+                                </p>
+                            </div>
+                            <div className="bg-slate-800 p-4 rounded-lg">
+                                <p className="text-slate-400 text-sm mb-1">ROI</p>
+                                <p className={`text-2xl font-bold ${veiculoResults.roi > 15 ? 'text-emerald-400' : 'text-yellow-400'}`}>
+                                    {veiculoResults.roi.toFixed(2)}%
+                                </p>
+                            </div>
+                            <div className="bg-slate-800 p-4 rounded-lg">
+                                <p className="text-slate-400 text-sm mb-1">Giro (Meses)</p>
+                                <p className="text-2xl font-bold text-white">{veiculoResults.tempoTotal.toFixed(1)}</p>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            );
+
+            return (
+                <div className="min-h-screen pb-20">
+                    <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-indigo-600 text-white p-2 rounded-lg">
+                                    <Icons.Calculator />
+                                </div>
+                                <div>
+                                    <h1 className="text-xl font-bold text-gray-900 tracking-tight">LeilãoInvest <span className="text-indigo-600">Pro</span></h1>
+                                    <p className="text-xs text-gray-500 font-medium">Análise de Viabilidade</p>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        <div className="flex justify-center mb-8">
+                            <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-200 inline-flex">
+                                <button
+                                    onClick={() => setActiveTab('imoveis')}
+                                    className={`flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-semibold transition-all ${
+                                        activeTab === 'imoveis' 
+                                        ? 'bg-indigo-600 text-white shadow-md transform scale-105' 
+                                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    <Icons.Building2 /> Imóveis
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('veiculos')}
+                                    className={`flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-semibold transition-all ${
+                                        activeTab === 'veiculos' 
+                                        ? 'bg-indigo-600 text-white shadow-md transform scale-105' 
+                                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    <Icons.Car /> Veículos
+                                </button>
+                            </div>
+                        </div>
+
+                        {activeTab === 'imoveis' ? renderImoveisForm() : renderVeiculosForm()}
+                    </main>
+                    
+                    <footer className="text-center text-gray-400 text-sm py-8 border-t border-gray-200 mt-8">
+                        <p>© {new Date().getFullYear()} LeilãoInvest Pro. Todos os direitos reservados.</p>
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
