@@ -219,25 +219,39 @@
             const imovelResults = useMemo(() => {
                 const d = imovelData;
                 const lance = parseNum(d.lancePretendido);
+                
+                // --- 1. CUSTOS DE AQUISIÇÃO (Entram na base de cálculo do imóvel) ---
                 const comissao = lance * 0.05;
                 const itbi = lance * (d.taxaItbi / 100);
+                // "outrosCustos" aqui assumimos como custos gerais que podem entrar na aquisição. 
+                // Se forem custos operacionais, não entrariam na base, mas para simplificação e conservadorismo:
+                const outrosCustos = parseNum(d.outrosCustos); 
+                
                 const totalArrematacao = comissao + itbi + parseNum(d.registroCartorio) + parseNum(d.certidoesDocumentos) + parseNum(d.advogado) + parseNum(d.vistoriaTecnica) + parseNum(d.seguroGarantia);
 
+                // Reforma entra na base de cálculo do imóvel (aumenta o custo de aquisição para o Fisco)
                 let custoReforma = 0;
                 if (d.necessitaReforma) {
                     const fator = d.tipoReforma === 'basica' ? 1 : d.tipoReforma === 'intermediaria' ? 1.3 : 1.6;
                     custoReforma = parseNum(d.metragem) * parseNum(d.custoM2) * fator;
                 }
-                const outrosCustos = parseNum(d.outrosCustos);
+
+                // Base de Custo Fiscal (Valor que será declarado como custo do imóvel para a Receita)
+                // Geralmente: Valor Pago + ITBI + Cartório + Reforma + Comissão
+                const baseCustoFiscal = lance + totalArrematacao + custoReforma + outrosCustos;
+
+                // --- 2. CUSTOS DE MANUTENÇÃO (NÃO entram na base de cálculo do imóvel para PF geralmente) ---
                 const manutencaoMensal = parseNum(d.iptuMensal) + parseNum(d.condominioMensal);
                 const custoManutencaoTotal = manutencaoMensal * parseNum(d.tempoVenda);
 
-                let investimentoInicial = lance + totalArrematacao + custoReforma + outrosCustos;
+                // --- 3. INVESTIMENTO INICIAL (Caixa) ---
+                let investimentoInicial = baseCustoFiscal;
                 let prestacao = 0;
                 let saldoDevedor = 0;
 
                 if (d.usarFinanciamento) {
                     const fin = calculateFinancing(lance, d.entradaPercent, d.taxaJuros, d.prazoFinanciamento);
+                    // O investimento inicial do bolso é a entrada + taxas + reforma
                     investimentoInicial = fin.entry + totalArrematacao + custoReforma + outrosCustos;
                     prestacao = fin.payment;
                     const taxaMensal = (d.taxaJuros / 100) / 12;
@@ -255,14 +269,40 @@
                 let impostoGanhoCapital = 0;
                 
                 if (d.estrategia === 'venda') {
-                    const custoTotalBase = lance + totalArrematacao + custoReforma + custosVenda + outrosCustos; 
-                    const ganhoBruto = valorVendaEstimado - custoTotalBase;
-                    impostoGanhoCapital = ganhoBruto > 0 ? ganhoBruto * 0.15 : 0;
-                    const recebidoVenda = valorVendaEstimado - custosVenda - impostoGanhoCapital - (d.usarFinanciamento ? saldoDevedor : 0);
-                    const parcelasPagas = d.usarFinanciamento ? (prestacao * d.tempoVenda) : 0;
-                    lucroLiquido = recebidoVenda - investimentoInicial - custoManutencaoTotal - parcelasPagas;
-                    const capitalInvestido = investimentoInicial + custoManutencaoTotal + parcelasPagas;
-                    roi = capitalInvestido > 0 ? (lucroLiquido / capitalInvestido) * 100 : 0;
+                    // --- CÁLCULO DO IMPOSTO (GANHO DE CAPITAL) ---
+                    // Valor da Venda - Corretagem - Base de Custo Fiscal
+                    // (A publicidade às vezes pode ser deduzida, mas corretagem é certeza)
+                    const valorVendaLiquidoDeComissao = valorVendaEstimado - (valorVendaEstimado * d.corretagemPercent / 100); 
+                    
+                    const ganhoBrutoFiscal = valorVendaLiquidoDeComissao - baseCustoFiscal;
+                    
+                    // Se houver ganho, aplica 15%
+                    impostoGanhoCapital = ganhoBrutoFiscal > 0 ? ganhoBrutoFiscal * 0.15 : 0;
+                    
+                    // --- CÁLCULO DO LUCRO LÍQUIDO REAL (Financeiro) ---
+                    // Recebido: Valor Venda
+                    // Pagos: 
+                    //  - Custos Venda (Comissão + MKT)
+                    //  - Imposto
+                    //  - Quitação Financiamento (se houver)
+                    //  - Investimento Inicial
+                    //  - Manutenção Mensal Total
+                    //  - Parcelas Pagas (se financiado)
+                    
+                    const recebidoVenda = valorVendaEstimado;
+                    const totalDesembolsos = custosVenda + impostoGanhoCapital + (d.usarFinanciamento ? saldoDevedor : 0) + investimentoInicial + custoManutencaoTotal + (d.usarFinanciamento ? (prestacao * d.tempoVenda) : 0);
+                    
+                    // Simplificando a conta: Lucro = Recebido Líquido - Custo Total Real
+                    // Recebido Líquido = Venda - Custos Venda - Imposto - Saldo Devedor
+                    const recebidoLiquidoVenda = valorVendaEstimado - custosVenda - impostoGanhoCapital - (d.usarFinanciamento ? saldoDevedor : 0);
+                    
+                    // Lucro = (O que entrou na venda) - (Tudo que saiu do bolso até agora)
+                    // O que saiu: Investimento Inicial + Manutenção + Parcelas
+                    const totalInvestidoDoBolso = investimentoInicial + custoManutencaoTotal + (d.usarFinanciamento ? (prestacao * d.tempoVenda) : 0);
+                    
+                    lucroLiquido = recebidoLiquidoVenda - totalInvestidoDoBolso;
+                    
+                    roi = totalInvestidoDoBolso > 0 ? (lucroLiquido / totalInvestidoDoBolso) * 100 : 0;
                 } else {
                     const rendaAnual = parseNum(d.valorAluguel) * 12;
                     lucroLiquido = rendaAnual - (d.usarFinanciamento ? (prestacao * 12) : 0);
