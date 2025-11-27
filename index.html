@@ -304,13 +304,6 @@
                     const entradas = valorVendaEstimado;
                     
                     // Saídas totais
-                    // 1. Quitação financiamento (se houver)
-                    // 2. Custos de Venda (Corretagem + Publicidade)
-                    // 3. Imposto IR
-                    // 4. Manutenção durante o período
-                    // 5. Investimento inicial já feito
-                    // 6. Parcelas pagas (se houver)
-                    
                     const saidasVenda = valorCorretagem + valorPublicidade + impostoGanhoCapital + (d.usarFinanciamento ? saldoDevedor : 0);
                     const custosOperacionais = custoManutencaoTotal + (d.usarFinanciamento ? (prestacao * d.tempoVenda) : 0);
                     
@@ -574,7 +567,7 @@
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                             <div className="bg-slate-800 p-4 rounded-lg">
-                                <p className="text-slate-400 text-sm mb-1">Investimento Inicial (Caixa)</p>
+                                <p className="text-slate-400 text-sm mb-1">Investimento Inicial</p>
                                 <p className="text-2xl font-bold text-white">{formatCurrency(imovelResults.investimentoInicial)}</p>
                             </div>
                             <div className="bg-slate-800 p-4 rounded-lg">
@@ -608,19 +601,17 @@
                                         <span>{formatCurrency(imovelResults.valorVendaEstimado)}</span>
                                     </div>
                                     <div className="flex justify-between text-red-300">
-                                        <span>(-) Custo de Aquisição (Lance + Taxas)</span>
-                                        <span>- {formatCurrency(imovelResults.baseCustoFiscal - (imovelResults.baseCustoFiscal - parseNum(imovelData.outrosCustos)))} (Ops, detalhado abaixo)</span>
+                                        <span>(-) Custo de Aquisição & Benfeitorias</span>
+                                        <span>- {formatCurrency(imovelResults.baseCustoFiscal)}</span>
                                     </div>
-                                    {/* Detalhando melhor visualmente */}
                                     <div className="pl-4 text-xs text-slate-400">
                                         <div className="flex justify-between">
-                                            <span>Base Aquisição + Reforma + Outros:</span>
-                                            <span>- {formatCurrency(imovelResults.baseCustoFiscal)}</span>
+                                            <span>(Lance + Taxas + Reforma + Outros)</span>
                                         </div>
-                                        <div className="flex justify-between">
-                                            <span>Corretagem (Dedutível):</span>
-                                            <span>- {formatCurrency(imovelResults.valorCorretagem)}</span>
-                                        </div>
+                                    </div>
+                                    <div className="flex justify-between text-red-300">
+                                        <span>(-) Corretagem (Dedutível)</span>
+                                        <span>- {formatCurrency(imovelResults.valorCorretagem)}</span>
                                     </div>
                                     <div className="flex justify-between border-t border-slate-600 pt-1 font-bold text-white">
                                         <span>(=) Lucro Tributável (Base de Cálculo)</span>
