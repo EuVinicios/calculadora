@@ -75,48 +75,42 @@
             </div>
         );
 
-        // Componente de Input com Máscara de Moeda
+        // Componente de Input com Máscara de Moeda (ATM Style)
         const CurrencyInput = ({ value, onChange, name, placeholder, readOnly = false, className = "" }) => {
-            // Formatar valor inicial para exibição
-            const formatValue = (val) => {
-                if (!val && val !== 0) return '';
-                // Converte para string e remove não-números
-                const numericValue = String(val).replace(/\D/g, '');
-                if (!numericValue) return '';
-                
-                // Formata como moeda BRL (divide por 100 para centavos)
-                const amount = parseFloat(numericValue) / 100;
-                return amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            
+            // Função para converter Float -> String Formatada (R$ 1.000,00)
+            const floatToBRL = (val) => {
+                if (val === '' || val === undefined || val === null) return '';
+                return Number(val).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             };
 
-            const [displayValue, setDisplayValue] = useState(formatValue(value));
+            // Função para converter Input do Usuário (100050) -> Float (1000.50)
+            const stringToFloat = (str) => {
+                const digits = str.replace(/\D/g, "");
+                return digits ? (Number(digits) / 100) : '';
+            };
 
-            // Sincroniza displayValue quando a prop value muda externamente (ex: cálculos)
+            // Estado local para controle do input
+            const [displayValue, setDisplayValue] = useState(floatToBRL(value));
+
+            // Sincroniza estado se o valor vier de fora (ex: reset ou cálculo automático)
             useEffect(() => {
-                setDisplayValue(formatValue(value));
+                setDisplayValue(floatToBRL(value));
             }, [value]);
 
             const handleChange = (e) => {
-                const inputValue = e.target.value;
-                // Remove tudo que não é dígito
-                const numericString = inputValue.replace(/\D/g, '');
+                const rawValue = e.target.value;
+                const newValue = stringToFloat(rawValue);
                 
-                // Calcula o valor real (float) para o estado do React
-                const realValue = numericString ? parseFloat(numericString) / 100 : '';
+                // Atualiza visualmente imediatamente
+                setDisplayValue(floatToBRL(newValue));
                 
-                // Atualiza o valor visual formatado
-                setDisplayValue(formatValue(realValue * 100)); // *100 porque formatValue espera centavos na lógica interna temporária ou ajusta div
-                // Mas minha func formatValue já divide por 100. Então se eu passar realValue direto:
-                // Se realValue é 3000.00 -> formatValue faz 3000.00 / 100 = 30. Errado.
-                // Melhor: formatValue recebe o valor RAW (float) e formata.
-                // Vamos simplificar:
-                
-                // Simula o evento padrão para o pai
+                // Manda o valor numérico puro para o pai
                 onChange({
                     target: {
                         name: name,
-                        value: realValue,
-                        type: 'currency' // Marcador customizado
+                        value: newValue,
+                        type: 'currency'
                     }
                 });
             };
@@ -127,14 +121,14 @@
                         <span className="text-gray-500 sm:text-sm">R$</span>
                     </div>
                     <input
-                        type="text" // Mudado para text para aceitar formatação
+                        type="text"
                         name={name}
                         value={displayValue}
                         onChange={handleChange}
                         placeholder={placeholder || "0,00"}
                         readOnly={readOnly}
                         className={`block w-full pl-10 pr-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md border ${readOnly ? 'bg-gray-100 text-gray-500' : 'bg-white'} ${className}`}
-                        inputMode="numeric" // Teclado numérico no mobile
+                        inputMode="numeric"
                     />
                 </div>
             );
