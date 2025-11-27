@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LeilãoInvest Pro | Calculadora de Viabilidade</title>
+    <title>LeilãoInvest Pro | Calculadora Avançada</title>
     
     <!-- React e ReactDOM via CDN -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -40,7 +40,7 @@
     <script type="text/babel">
         const { useState, useMemo } = React;
 
-        // --- 1. ÍCONES (Definidos fora para evitar re-renderização) ---
+        // --- 1. ÍCONES ---
         const Icons = {
             Calculator: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>,
             Building2: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg>,
@@ -48,11 +48,11 @@
             TrendingUp: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>,
             Hammer: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 12-8.5 8.5c-.83.83-2.17.83-3 0 0 0 0 0 0 0a2.12 2.12 0 0 1 0-3L12 9"/><path d="M17.64 15 22 10.64"/><path d="m20.91 11.7-1.25-1.25c-.6-.6-.93-1.4-.93-2.25V7.86c0-.55-.45-1-1-1H14.14c-.83 0-1.64.32-2.25.92L9.64 10"/><path d="m17.38 5.38 3.12 3.12"/></svg>,
             BarChart3: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>,
-            ChevronDown: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            ChevronDown: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>,
+            Clock: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         };
 
-        // --- 2. COMPONENTES VISUAIS (MOVIDOS PARA FORA DO APP) ---
-        // Isso corrige o bug de perda de foco, pois o React mantém a identidade do componente
+        // --- 2. COMPONENTES VISUAIS ---
         
         const SectionHeader = ({ title, icon: Icon }) => (
             <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-200 text-gray-800">
@@ -92,7 +92,7 @@
         const App = () => {
             const [activeTab, setActiveTab] = useState('imoveis');
             
-            // Estado Imóveis
+            // Estado Imóveis (Atualizado com campos da planilha)
             const [imovelData, setImovelData] = useState({
                 endereco: '',
                 tipo: 'apartamento',
@@ -104,33 +104,43 @@
                 documentacao: 'regular',
                 tipoLeilao: 'extrajudicial',
                 ocupacao: 'livre',
-                dataLeilao: '',
                 valorAvaliacao: '',
-                lanceMinimo1: '',
-                lanceMinimo2: '',
                 valorMercado: '',
                 tempoVenda: 6,
                 demanda: 'media',
                 estrategia: 'venda',
                 valorAluguel: '',
                 lancePretendido: '',
+                
+                // Custos Aquisição
                 taxaItbi: 3.0,
                 registroCartorio: 2850,
+                advogado: 1900, // Advogado Desocupação/Assessoria
                 certidoesDocumentos: 500,
-                advogado: 1900,
                 vistoriaTecnica: 800,
                 seguroGarantia: 950,
+                
+                // Manutenção (Novos campos da planilha)
+                iptuMensal: '',
+                condominioMensal: '',
+                outrosCustos: '',
+                
+                // Reforma
                 necessitaReforma: false,
                 tipoReforma: 'basica',
                 custoM2: 200,
                 tempoReforma: 3,
+                
+                // Financiamento
                 usarFinanciamento: false,
                 entradaPercent: 20,
                 taxaJuros: 10.5,
                 prazoFinanciamento: 20,
+                
+                // Venda
                 corretagemPercent: 6,
                 publicidade: 2000,
-                tipoPessoa: 'pf'
+                tipoPessoa: 'pf' // PF = 15% Ganho Capital
             });
 
             // Estado Veículos
@@ -146,11 +156,8 @@
                 tipoLeilao: 'extrajudicial',
                 valorFipe: '',
                 lanceMinimo: '',
-                dataLeilao: '',
-                situacao: 'livre',
                 valorMercado: '',
                 tempoVenda: 3,
-                demanda: 'media',
                 estrategia: 'venda',
                 valorAluguel: '',
                 lancePretendido: '',
@@ -162,6 +169,7 @@
                 taxaTransferencia: 400,
                 vistoriaDocumentos: 500,
                 despachante: 0,
+                outrosCustos: 0,
                 usarFinanciamento: false,
                 entradaPercent: 30,
                 taxaJuros: 18.0,
@@ -188,7 +196,7 @@
                 }));
             };
 
-            // Cálculos
+            // Cálculos Auxiliares
             const formatCurrency = (value) => {
                 if (!value && value !== 0) return 'R$ 0,00';
                 return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -208,35 +216,41 @@
                 return { entry, financed, payment };
             };
 
-            const calculateTax = (gain, type) => {
-                if (gain <= 0) return 0;
-                return gain * (type === 'pf' ? 0.15 : 0.225);
-            };
-
-            // Resultados Imóveis (Memoized)
+            // Resultados Imóveis (Atualizado com lógica da planilha)
             const imovelResults = useMemo(() => {
                 const d = imovelData;
                 const lance = parseNum(d.lancePretendido);
                 
+                // 1. Custos da Arrematação
                 const comissao = lance * 0.05;
                 const itbi = lance * (d.taxaItbi / 100);
                 const totalArrematacao = comissao + itbi + parseNum(d.registroCartorio) + parseNum(d.certidoesDocumentos) + parseNum(d.advogado) + parseNum(d.vistoriaTecnica) + parseNum(d.seguroGarantia);
 
+                // 2. Reforma e Outros Extras
                 let custoReforma = 0;
                 if (d.necessitaReforma) {
                     const fator = d.tipoReforma === 'basica' ? 1 : d.tipoReforma === 'intermediaria' ? 1.3 : 1.6;
                     custoReforma = parseNum(d.metragem) * parseNum(d.custoM2) * fator;
                 }
+                const outrosCustos = parseNum(d.outrosCustos);
 
-                let investimentoInicial = lance + totalArrematacao + custoReforma;
+                // 3. Manutenção Pós-Posse (Planilha: Pós Posse)
+                // Soma mensal de condomínio e IPTU multiplicada pelo tempo de venda
+                const manutencaoMensal = parseNum(d.iptuMensal) + parseNum(d.condominioMensal);
+                const custoManutencaoTotal = manutencaoMensal * parseNum(d.tempoVenda);
+
+                // 4. Investimento Inicial (Cash necessário na frente)
+                // Se financiar, conta só a entrada + taxas + reforma (assume-se manutencao paga mensalmente com fluxo)
+                let investimentoInicial = lance + totalArrematacao + custoReforma + outrosCustos;
                 let prestacao = 0;
                 let saldoDevedor = 0;
 
                 if (d.usarFinanciamento) {
                     const fin = calculateFinancing(lance, d.entradaPercent, d.taxaJuros, d.prazoFinanciamento);
-                    investimentoInicial = fin.entry + totalArrematacao + custoReforma;
+                    investimentoInicial = fin.entry + totalArrematacao + custoReforma + outrosCustos;
                     prestacao = fin.payment;
                     
+                    // Calcula saldo devedor aproximado no mês da venda para quitar
                     const taxaMensal = (d.taxaJuros / 100) / 12;
                     saldoDevedor = fin.financed;
                     for (let i = 0; i < d.tempoVenda; i++) {
@@ -245,26 +259,41 @@
                 }
 
                 const valorVendaEstimado = parseNum(d.valorMercado);
+                
+                // 5. Despesas de Venda
                 const custosVenda = (valorVendaEstimado * d.corretagemPercent / 100) + parseNum(d.publicidade);
                 
                 let lucroLiquido = 0;
                 let roi = 0;
+                let impostoGanhoCapital = 0;
                 
                 if (d.estrategia === 'venda') {
-                    const custoTotalBase = lance + totalArrematacao + custoReforma + custosVenda;
-                    const ganhoCapital = valorVendaEstimado - custoTotalBase;
-                    const impostos = calculateTax(ganhoCapital, d.tipoPessoa);
+                    // Custo Total para base de cálculo do imposto (Aquisição + Melhorias)
+                    // Manutenção geralmente não abate ganho de capital PF, mas vamos seguir a lógica contábil de lucro do projeto
+                    const custoTotalBase = lance + totalArrematacao + custoReforma + custosVenda + outrosCustos; 
+                    const ganhoBruto = valorVendaEstimado - custoTotalBase;
                     
-                    const recebidoLiquido = valorVendaEstimado - custosVenda - impostos - (d.usarFinanciamento ? saldoDevedor : 0);
+                    // Imposto 15% sobre o ganho (Planilha)
+                    impostoGanhoCapital = ganhoBruto > 0 ? ganhoBruto * 0.15 : 0;
                     
-                    lucroLiquido = recebidoLiquido - investimentoInicial - (d.usarFinanciamento ? (prestacao * d.tempoVenda) : 0);
+                    // Recebimento Líquido da Venda
+                    const recebidoVenda = valorVendaEstimado - custosVenda - impostoGanhoCapital - (d.usarFinanciamento ? saldoDevedor : 0);
                     
-                    const investimentoTotalConsiderado = investimentoInicial + (d.usarFinanciamento ? (prestacao * d.tempoVenda) : 0);
-                    roi = investimentoTotalConsiderado > 0 ? (lucroLiquido / investimentoTotalConsiderado) * 100 : 0;
+                    // Lucro do Projeto = (Recebido - Investido - Custos Manutenção Pagos ao longo do tempo - Parcelas Pagas)
+                    const parcelasPagas = d.usarFinanciamento ? (prestacao * d.tempoVenda) : 0;
+                    
+                    lucroLiquido = recebidoVenda - investimentoInicial - custoManutencaoTotal - parcelasPagas;
+                    
+                    // ROI = Lucro / (Dinheiro que saiu do bolso)
+                    const capitalInvestido = investimentoInicial + custoManutencaoTotal + parcelasPagas;
+                    roi = capitalInvestido > 0 ? (lucroLiquido / capitalInvestido) * 100 : 0;
                 } else {
+                    // Aluguel
                     const rendaAnual = parseNum(d.valorAluguel) * 12;
-                    lucroLiquido = rendaAnual;
-                    roi = investimentoInicial > 0 ? (rendaAnual / investimentoInicial) * 100 : 0;
+                    // No aluguel, subtrai-se custos mensais (IPTU/Cond) se forem pagos pelo proprietário (vacância), 
+                    // mas aqui assumimos renda líquida ou bruta conforme input.
+                    lucroLiquido = rendaAnual - (d.usarFinanciamento ? (prestacao * 12) : 0);
+                    roi = investimentoInicial > 0 ? (lucroLiquido / investimentoInicial) * 100 : 0;
                 }
 
                 let classificacao = 'Inviável';
@@ -279,6 +308,9 @@
                     totalArrematacao,
                     custoReforma,
                     custosVenda,
+                    custoManutencaoTotal,
+                    outrosCustos,
+                    impostoGanhoCapital,
                     lucroLiquido,
                     roi,
                     classificacao,
@@ -289,7 +321,7 @@
                 };
             }, [imovelData]);
 
-            // Resultados Veículos (Memoized)
+            // Resultados Veículos (Similar update)
             const veiculoResults = useMemo(() => {
                 const d = veiculoData;
                 const lance = parseNum(d.lancePretendido);
@@ -298,14 +330,15 @@
                 const totalArrematacao = comissao + parseNum(d.despesaAdministrativa) + parseNum(d.taxaTransferencia) + parseNum(d.vistoriaDocumentos) + parseNum(d.despachante);
 
                 let custoReparo = d.necessitaReparo ? parseNum(d.custoReparo) : 0;
+                const outrosCustos = parseNum(d.outrosCustos);
 
-                let investimentoInicial = lance + totalArrematacao + custoReparo;
+                let investimentoInicial = lance + totalArrematacao + custoReparo + outrosCustos;
                 let prestacao = 0;
                 let saldoDevedor = 0;
 
                 if (d.usarFinanciamento) {
                     const fin = calculateFinancing(lance, d.entradaPercent, d.taxaJuros, d.prazoFinanciamento);
-                    investimentoInicial = fin.entry + totalArrematacao + custoReparo;
+                    investimentoInicial = fin.entry + totalArrematacao + custoReparo + outrosCustos;
                     prestacao = fin.payment;
                     
                     const taxaMensal = (d.taxaJuros / 100) / 12;
@@ -320,17 +353,20 @@
 
                 let lucroLiquido = 0;
                 let roi = 0;
+                let impostoGanhoCapital = 0;
 
                 if (d.estrategia === 'venda') {
-                    const custoTotalBase = lance + totalArrematacao + custoReparo + custosVenda;
-                    const ganhoCapital = valorVendaEstimado - custoTotalBase;
-                    const impostos = calculateTax(ganhoCapital, d.tipoPessoa);
-
-                    const recebidoLiquido = valorVendaEstimado - custosVenda - impostos - (d.usarFinanciamento ? saldoDevedor : 0);
+                    const custoTotalBase = lance + totalArrematacao + custoReparo + custosVenda + outrosCustos;
+                    const ganhoBruto = valorVendaEstimado - custoTotalBase;
                     
-                    lucroLiquido = recebidoLiquido - investimentoInicial - (d.usarFinanciamento ? (prestacao * d.tempoVenda) : 0);
-                    const investimentoTotalConsiderado = investimentoInicial + (d.usarFinanciamento ? (prestacao * d.tempoVenda) : 0);
-                    roi = investimentoTotalConsiderado > 0 ? (lucroLiquido / investimentoTotalConsiderado) * 100 : 0;
+                    impostoGanhoCapital = ganhoBruto > 0 ? ganhoBruto * 0.15 : 0;
+
+                    const recebidoLiquido = valorVendaEstimado - custosVenda - impostoGanhoCapital - (d.usarFinanciamento ? saldoDevedor : 0);
+                    const parcelasPagas = d.usarFinanciamento ? (prestacao * d.tempoVenda) : 0;
+                    
+                    lucroLiquido = recebidoLiquido - investimentoInicial - parcelasPagas;
+                    const capitalInvestido = investimentoInicial + parcelasPagas;
+                    roi = capitalInvestido > 0 ? (lucroLiquido / capitalInvestido) * 100 : 0;
                 } else {
                     const rendaAnual = parseNum(d.valorAluguel) * 12;
                     lucroLiquido = rendaAnual;
@@ -349,6 +385,8 @@
                     totalArrematacao,
                     custoReparo,
                     custosVenda,
+                    outrosCustos,
+                    impostoGanhoCapital,
                     lucroLiquido,
                     roi,
                     classificacao,
@@ -414,12 +452,17 @@
                                 </div>
                             </div>
 
-                            <InputGroup label="Estratégia" id="estrategia">
-                                <select name="estrategia" value={imovelData.estrategia} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border">
-                                    <option value="venda">Revenda</option>
-                                    <option value="aluguel">Aluguel (Renda)</option>
-                                </select>
-                            </InputGroup>
+                            <div className="grid grid-cols-2 gap-4">
+                                <InputGroup label="Estratégia" id="estrategia">
+                                    <select name="estrategia" value={imovelData.estrategia} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border">
+                                        <option value="venda">Revenda</option>
+                                        <option value="aluguel">Aluguel</option>
+                                    </select>
+                                </InputGroup>
+                                <InputGroup label="Tempo Venda (Meses)" id="tempoVenda" subtext="Afeta custos mensais">
+                                    <input type="number" name="tempoVenda" value={imovelData.tempoVenda} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border" />
+                                </InputGroup>
+                            </div>
 
                             {imovelData.estrategia === 'aluguel' && (
                                 <InputGroup label="Valor Aluguel Mensal" id="valorAluguel">
@@ -437,9 +480,9 @@
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-50 p-4 rounded-lg">
                                         <InputGroup label="Nível">
                                             <select name="tipoReforma" value={imovelData.tipoReforma} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md p-2 border">
-                                                <option value="basica">Básica (Pintura/Reparos)</option>
-                                                <option value="intermediaria">Média (Pisos/Banheiro)</option>
-                                                <option value="completa">Completa (Estrutural)</option>
+                                                <option value="basica">Básica (Pintura)</option>
+                                                <option value="intermediaria">Média (Pisos)</option>
+                                                <option value="completa">Completa</option>
                                             </select>
                                         </InputGroup>
                                         <InputGroup label="Custo Est. (R$/m²)">
@@ -450,6 +493,25 @@
                                         </InputGroup>
                                     </div>
                                 )}
+                            </div>
+                        </div>
+                    </section>
+
+                    <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                        <SectionHeader title="Manutenção Pós-Posse (Mensal)" icon={Icons.Clock} />
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <InputGroup label="Condomínio Mensal" subtext="Valor cheio sem desconto">
+                                <CurrencyInput name="condominioMensal" value={imovelData.condominioMensal} onChange={handleImovelChange} />
+                            </InputGroup>
+                            <InputGroup label="IPTU Mensal" subtext="Parcela mensal">
+                                <CurrencyInput name="iptuMensal" value={imovelData.iptuMensal} onChange={handleImovelChange} />
+                            </InputGroup>
+                            <div className="bg-yellow-50 p-3 rounded border border-yellow-100">
+                                <p className="text-xs text-yellow-800 font-bold">Custo Total no Período:</p>
+                                <p className="text-lg font-bold text-yellow-900">
+                                    {formatCurrency((parseNum(imovelData.condominioMensal) + parseNum(imovelData.iptuMensal)) * parseNum(imovelData.tempoVenda))}
+                                </p>
+                                <p className="text-xs text-yellow-600">Considerando {imovelData.tempoVenda} meses de venda.</p>
                             </div>
                         </div>
                     </section>
@@ -467,11 +529,11 @@
                                 <InputGroup label="Registro (R$)">
                                     <CurrencyInput name="registroCartorio" value={imovelData.registroCartorio} onChange={handleImovelChange} />
                                 </InputGroup>
-                                <InputGroup label="Advogado (R$)">
+                                <InputGroup label="Advogado Desocupação (R$)">
                                     <CurrencyInput name="advogado" value={imovelData.advogado} onChange={handleImovelChange} />
                                 </InputGroup>
-                                <InputGroup label="Outros Débitos">
-                                    <CurrencyInput name="certidoesDocumentos" value={imovelData.certidoesDocumentos} onChange={handleImovelChange} placeholder="Valor Total" />
+                                <InputGroup label="Outros Custos Extras">
+                                    <CurrencyInput name="outrosCustos" value={imovelData.outrosCustos} onChange={handleImovelChange} placeholder="Valor Total" />
                                 </InputGroup>
                             </div>
                         </details>
@@ -480,7 +542,7 @@
                     <section className="bg-slate-900 text-white p-6 rounded-xl shadow-lg mt-8">
                         <div className="flex items-center gap-3 mb-6">
                             <span className="text-emerald-400"><Icons.BarChart3 /></span>
-                            <h2 className="text-xl font-bold">Análise de Viabilidade</h2>
+                            <h2 className="text-xl font-bold">Resultado Financeiro</h2>
                             <span className={`ml-auto px-4 py-1 rounded-full text-sm font-bold uppercase tracking-wider ${imovelResults.corClassificacao}`}>
                                 {imovelResults.classificacao}
                             </span>
@@ -488,11 +550,11 @@
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                             <div className="bg-slate-800 p-4 rounded-lg">
-                                <p className="text-slate-400 text-sm mb-1">Investimento Inicial (Caixa)</p>
+                                <p className="text-slate-400 text-sm mb-1">Investimento Inicial</p>
                                 <p className="text-2xl font-bold text-white">{formatCurrency(imovelResults.investimentoInicial)}</p>
                             </div>
                             <div className="bg-slate-800 p-4 rounded-lg">
-                                <p className="text-slate-400 text-sm mb-1">Lucro Líquido Projetado</p>
+                                <p className="text-slate-400 text-sm mb-1">Lucro Líquido Final</p>
                                 <p className={`text-2xl font-bold ${imovelResults.lucroLiquido > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                     {formatCurrency(imovelResults.lucroLiquido)}
                                 </p>
@@ -504,8 +566,19 @@
                                 </p>
                             </div>
                             <div className="bg-slate-800 p-4 rounded-lg">
-                                <p className="text-slate-400 text-sm mb-1">Tempo do Projeto</p>
-                                <p className="text-2xl font-bold text-white">{imovelResults.tempoTotal.toFixed(1)} meses</p>
+                                <p className="text-slate-400 text-sm mb-1">Imposto Ganho Capital (15%)</p>
+                                <p className="text-2xl font-bold text-red-300">{formatCurrency(imovelResults.impostoGanhoCapital)}</p>
+                            </div>
+                        </div>
+
+                        <div className="border-t border-slate-700 pt-4 mt-4 text-sm text-slate-300 grid grid-cols-2 gap-4">
+                            <div>
+                                <span className="block text-slate-500">Custos Manutenção ({imovelData.tempoVenda} meses):</span>
+                                <span className="font-semibold">{formatCurrency(imovelResults.custoManutencaoTotal)}</span>
+                            </div>
+                            <div>
+                                <span className="block text-slate-500">Despesas de Venda (Comissão + MKT):</span>
+                                <span className="font-semibold">{formatCurrency(imovelResults.custosVenda)}</span>
                             </div>
                         </div>
                     </section>
@@ -568,8 +641,8 @@
                             <InputGroup label="Despesas Pátio/Admin">
                                 <CurrencyInput name="despesaAdministrativa" value={veiculoData.despesaAdministrativa} onChange={handleVeiculoChange} />
                             </InputGroup>
-                            <InputGroup label="Documentação/IPVA">
-                                <CurrencyInput name="vistoriaDocumentos" value={veiculoData.vistoriaDocumentos} onChange={handleVeiculoChange} />
+                            <InputGroup label="Outros Custos">
+                                <CurrencyInput name="outrosCustos" value={veiculoData.outrosCustos} onChange={handleVeiculoChange} />
                             </InputGroup>
                         </div>
                     </section>
@@ -585,7 +658,7 @@
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                             <div className="bg-slate-800 p-4 rounded-lg">
-                                <p className="text-slate-400 text-sm mb-1">Custo Total (Lance+Taxas)</p>
+                                <p className="text-slate-400 text-sm mb-1">Custo Total</p>
                                 <p className="text-2xl font-bold text-white">{formatCurrency(veiculoResults.investimentoInicial)}</p>
                             </div>
                             <div className="bg-slate-800 p-4 rounded-lg">
@@ -601,8 +674,8 @@
                                 </p>
                             </div>
                             <div className="bg-slate-800 p-4 rounded-lg">
-                                <p className="text-slate-400 text-sm mb-1">Giro (Meses)</p>
-                                <p className="text-2xl font-bold text-white">{veiculoResults.tempoTotal.toFixed(1)}</p>
+                                <p className="text-slate-400 text-sm mb-1">Imposto (15%)</p>
+                                <p className="text-2xl font-bold text-red-300">{formatCurrency(veiculoResults.impostoGanhoCapital)}</p>
                             </div>
                         </div>
                     </section>
