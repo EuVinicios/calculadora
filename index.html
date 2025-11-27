@@ -130,7 +130,6 @@
         const App = () => {
             const [activeTab, setActiveTab] = useState('imoveis');
             
-            // Estado Imóveis
             const [imovelData, setImovelData] = useState({
                 endereco: '',
                 tipo: 'apartamento',
@@ -166,12 +165,11 @@
                 entradaPercent: 20,
                 taxaJuros: 10.5,
                 prazoFinanciamento: 20,
-                corretagemPercent: 6,
+                corretagemPercent: 6, // Editável
                 publicidade: 2000,
                 tipoPessoa: 'pf'
             });
 
-            // Estado Veículos
             const [veiculoData, setVeiculoData] = useState({
                 marcaModelo: '',
                 anoFabricacao: '',
@@ -202,12 +200,11 @@
                 entradaPercent: 30,
                 taxaJuros: 18.0,
                 prazoFinanciamento: 5,
-                corretagemPercent: 3,
+                corretagemPercent: 3, // Editável
                 publicidade: 800,
                 tipoPessoa: 'pf'
             });
 
-            // Handlers
             const handleImovelChange = (e) => {
                 const { name, value, type, checked } = e.target;
                 setImovelData(prev => ({
@@ -243,50 +240,31 @@
                 return { entry, financed, payment };
             };
 
-            // Resultados Imóveis (Lógica Detalhada)
             const imovelResults = useMemo(() => {
                 const d = imovelData;
                 const lance = parseNum(d.lancePretendido);
                 
-                // 1. Custos de Aquisição (Lance + Taxas)
-                const comissaoLeiloeiro = lance * 0.05;
+                const comissaoLeiloeiro = lance * 0.05; // FIX: Nome da variável corrigido
                 const itbi = lance * (d.taxaItbi / 100);
-                const outrosCustosAquisicao = parseNum(d.outrosCustos); // Assumindo Outros como aquisição p/ base
+                const outrosCustosAquisicao = parseNum(d.outrosCustos); 
                 const totalTaxasAquisicao = comissaoLeiloeiro + itbi + parseNum(d.registroCartorio) + parseNum(d.certidoesDocumentos) + parseNum(d.advogado) + parseNum(d.vistoriaTecnica) + parseNum(d.seguroGarantia);
                 
-                // 2. Reforma (Benfeitoria)
                 let custoReforma = 0;
                 if (d.necessitaReforma) {
                     const fator = d.tipoReforma === 'basica' ? 1 : d.tipoReforma === 'intermediaria' ? 1.3 : 1.6;
                     custoReforma = parseNum(d.metragem) * parseNum(d.custoM2) * fator;
                 }
 
-                // Base de Custo Fiscal (O que a Receita aceita como custo)
-                // Inclui: Valor Pago + ITBI + Registro + Comissão Leiloeiro + Reforma + Outros
                 const baseCustoFiscal = lance + totalTaxasAquisicao + custoReforma + outrosCustosAquisicao;
-
-                // 3. Custos de Venda (Dedutíveis do Ganho de Capital)
-                const valorVendaEstimado = parseNum(d.valorMercado);
-                const valorCorretagem = valorVendaEstimado * (d.corretagemPercent / 100);
-                const valorPublicidade = parseNum(d.publicidade);
-                
-                // Para cálculo de IR, a corretagem é dedutível do valor de alienação.
-                // Base de Cálculo do Imposto = (Valor Venda - Corretagem) - Custo de Aquisição/Benfeitorias
-                const ganhoCapitalBruto = (valorVendaEstimado - valorCorretagem) - baseCustoFiscal;
-                const impostoGanhoCapital = ganhoCapitalBruto > 0 ? ganhoCapitalBruto * 0.15 : 0;
-
-                // 4. Custos Operacionais (Manutenção) - Saem do Lucro Líquido, mas não abatem IR PF
                 const manutencaoMensal = parseNum(d.iptuMensal) + parseNum(d.condominioMensal);
                 const custoManutencaoTotal = manutencaoMensal * parseNum(d.tempoVenda);
 
-                // 5. Fluxo de Caixa (Lucro Líquido Real)
-                let investimentoInicial = baseCustoFiscal; // Sem financiamento
+                let investimentoInicial = baseCustoFiscal;
                 let prestacao = 0;
                 let saldoDevedor = 0;
 
                 if (d.usarFinanciamento) {
                     const fin = calculateFinancing(lance, d.entradaPercent, d.taxaJuros, d.prazoFinanciamento);
-                    // Investimento inicial real (bolso)
                     investimentoInicial = fin.entry + totalTaxasAquisicao + custoReforma + outrosCustosAquisicao;
                     prestacao = fin.payment;
                     const taxaMensal = (d.taxaJuros / 100) / 12;
@@ -296,21 +274,25 @@
                     }
                 }
 
+                const valorVendaEstimado = parseNum(d.valorMercado);
+                const valorCorretagem = valorVendaEstimado * (d.corretagemPercent / 100);
+                const valorPublicidade = parseNum(d.publicidade);
+                
                 let lucroLiquido = 0;
                 let roi = 0;
+                let impostoGanhoCapital = 0;
+                let ganhoCapitalBruto = 0;
                 
                 if (d.estrategia === 'venda') {
-                    // Recebido na venda
-                    const entradas = valorVendaEstimado;
+                    const valorVendaLiquidoDeComissao = valorVendaEstimado - valorCorretagem; 
+                    ganhoCapitalBruto = valorVendaLiquidoDeComissao - baseCustoFiscal;
+                    impostoGanhoCapital = ganhoCapitalBruto > 0 ? ganhoCapitalBruto * 0.15 : 0;
                     
-                    // Saídas totais
-                    const saidasVenda = valorCorretagem + valorPublicidade + impostoGanhoCapital + (d.usarFinanciamento ? saldoDevedor : 0);
-                    const custosOperacionais = custoManutencaoTotal + (d.usarFinanciamento ? (prestacao * d.tempoVenda) : 0);
+                    const recebidoLiquidoVenda = valorVendaEstimado - valorCorretagem - valorPublicidade - impostoGanhoCapital - (d.usarFinanciamento ? saldoDevedor : 0);
+                    const totalInvestidoDoBolso = investimentoInicial + custoManutencaoTotal + (d.usarFinanciamento ? (prestacao * d.tempoVenda) : 0);
                     
-                    lucroLiquido = entradas - saidasVenda - custosOperacionais - investimentoInicial;
-                    
-                    const capitalTotalInvestido = investimentoInicial + custosOperacionais;
-                    roi = capitalTotalInvestido > 0 ? (lucroLiquido / capitalTotalInvestido) * 100 : 0;
+                    lucroLiquido = recebidoLiquidoVenda - totalInvestidoDoBolso;
+                    roi = totalInvestidoDoBolso > 0 ? (lucroLiquido / totalInvestidoDoBolso) * 100 : 0;
                 } else {
                     const rendaAnual = parseNum(d.valorAluguel) * 12;
                     lucroLiquido = rendaAnual - (d.usarFinanciamento ? (prestacao * 12) : 0);
@@ -552,6 +534,9 @@
                                 <InputGroup label="Outros Custos Extras">
                                     <CurrencyInput name="outrosCustos" value={imovelData.outrosCustos} onChange={handleImovelChange} placeholder="Valor Total" className="h-11" />
                                 </InputGroup>
+                                <InputGroup label="Comissão Corretor (%)">
+                                    <input type="number" name="corretagemPercent" value={imovelData.corretagemPercent} onChange={handleImovelChange} className="w-full border p-2 rounded h-11" />
+                                </InputGroup>
                             </div>
                         </details>
                     </section>
@@ -698,6 +683,9 @@
                             </InputGroup>
                             <InputGroup label="Outros Custos">
                                 <CurrencyInput name="outrosCustos" value={veiculoData.outrosCustos} onChange={handleVeiculoChange} className="h-11" />
+                            </InputGroup>
+                            <InputGroup label="Comissão Corretor (%)">
+                                <input type="number" name="corretagemPercent" value={veiculoData.corretagemPercent} onChange={handleVeiculoChange} className="w-full border p-2 rounded h-11" />
                             </InputGroup>
                         </div>
                     </section>
