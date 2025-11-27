@@ -54,7 +54,8 @@
             BarChart3: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>,
             ChevronDown: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>,
             Clock: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
-            Info: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            Info: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>,
+            Bank: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="16" height="16" x="4" y="5" rx="2"/><path d="M2 10h20"/><path d="M12 2v3"/><path d="M12 21v3"/></svg>
         };
 
         // --- 2. COMPONENTES VISUAIS ---
@@ -76,7 +77,6 @@
             </div>
         );
 
-        // Componente de Input com Máscara de Moeda (ATM Style)
         const CurrencyInput = ({ value, onChange, name, placeholder, readOnly = false, className = "" }) => {
             const floatToBRL = (val) => {
                 if (val === '' || val === undefined || val === null) return '';
@@ -126,7 +126,58 @@
             );
         };
 
-        // --- 3. APLICAÇÃO PRINCIPAL ---
+        // --- 3. LÓGICA DE FINANCIAMENTO ---
+        const calculateAmortization = (principal, annualRate, months, system, holdingPeriod, gracePeriod = 0) => {
+            if (!principal || principal <= 0) return { totalPaid: 0, outstandingBalance: 0, firstInstallment: 0, lastInstallment: 0 };
+
+            const monthlyRate = (Math.pow(1 + (annualRate / 100), 1 / 12) - 1);
+            let balance = principal;
+            let totalPaid = 0;
+            let firstInstallment = 0;
+            let lastInstallment = 0;
+
+            for (let i = 1; i <= holdingPeriod; i++) {
+                let interest = balance * monthlyRate;
+                let amortization = 0;
+                let payment = 0;
+
+                if (i <= gracePeriod) {
+                    payment = interest; 
+                    amortization = 0;
+                } else {
+                    const activeMonth = i - gracePeriod;
+                    
+                    if (system === 'sac') {
+                        amortization = principal / months; 
+                        payment = amortization + interest;
+                    } else {
+                        payment = (principal * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -months));
+                        amortization = payment - interest;
+                    }
+                    
+                    if (balance < amortization) {
+                        amortization = balance;
+                        payment = amortization + interest;
+                    }
+                }
+
+                if (i === 1 + gracePeriod) firstInstallment = payment;
+                if (i === holdingPeriod) lastInstallment = payment;
+
+                totalPaid += payment;
+                balance -= amortization;
+                if (balance < 0) balance = 0;
+            }
+
+            return {
+                totalPaid,
+                outstandingBalance: balance,
+                firstInstallment,
+                lastInstallment
+            };
+        };
+
+        // --- 4. APLICAÇÃO PRINCIPAL ---
         const App = () => {
             const [activeTab, setActiveTab] = useState('imoveis');
             
@@ -148,7 +199,7 @@
                 estrategia: 'venda',
                 valorAluguel: '',
                 lancePretendido: '',
-                comissaoLeiloeiroPercent: 5, // Novo campo editável
+                comissaoLeiloeiroPercent: 5,
                 taxaItbi: 3.0,
                 registroCartorio: 2850,
                 advogado: 1900,
@@ -162,11 +213,17 @@
                 tipoReforma: 'basica',
                 custoM2: 200,
                 tempoReforma: 3,
+                
+                // FINANCIAMENTO
                 usarFinanciamento: false,
                 entradaPercent: 20,
                 taxaJuros: 10.5,
-                prazoFinanciamento: 20,
-                corretagemPercent: 6, // Editável
+                prazoFinanciamento: 360,
+                sistemaAmortizacao: 'sac',
+                custosBancarios: 3500,
+                carencia: 0,
+                
+                corretagemPercent: 6,
                 publicidade: 2000,
                 tipoPessoa: 'pf'
             });
@@ -188,7 +245,7 @@
                 estrategia: 'venda',
                 valorAluguel: '',
                 lancePretendido: '',
-                comissaoLeiloeiroPercent: 5, // Novo campo
+                comissaoLeiloeiroPercent: 5,
                 necessitaReparo: false,
                 tipoReparo: 'basico',
                 custoReparo: 2000,
@@ -201,8 +258,11 @@
                 usarFinanciamento: false,
                 entradaPercent: 30,
                 taxaJuros: 18.0,
-                prazoFinanciamento: 5,
-                corretagemPercent: 3, // Editável
+                prazoFinanciamento: 60,
+                sistemaAmortizacao: 'price',
+                custosBancarios: 1200,
+                carencia: 0,
+                corretagemPercent: 3,
                 publicidade: 800,
                 tipoPessoa: 'pf'
             });
@@ -246,11 +306,13 @@
                 const d = imovelData;
                 const lance = parseNum(d.lancePretendido);
                 
-                // Cálculo dinâmico da comissão do leiloeiro
+                // --- FIX: Cálculo correto usando a porcentagem do estado e definição da variável ---
                 const valorComissaoLeiloeiro = lance * (d.comissaoLeiloeiroPercent / 100);
                 
                 const itbi = lance * (d.taxaItbi / 100);
                 const outrosCustosAquisicao = parseNum(d.outrosCustos); 
+                
+                // Usando a variável definida acima
                 const totalTaxasAquisicao = valorComissaoLeiloeiro + itbi + parseNum(d.registroCartorio) + parseNum(d.certidoesDocumentos) + parseNum(d.advogado) + parseNum(d.vistoriaTecnica) + parseNum(d.seguroGarantia);
                 
                 let custoReforma = 0;
@@ -264,18 +326,24 @@
                 const custoManutencaoTotal = manutencaoMensal * parseNum(d.tempoVenda);
 
                 let investimentoInicial = baseCustoFiscal;
-                let prestacao = 0;
-                let saldoDevedor = 0;
+                let financiamentoSimulacao = { totalPaid: 0, outstandingBalance: 0, firstInstallment: 0 };
+                let valorFinanciado = 0;
+                let valorEntrada = 0;
 
                 if (d.usarFinanciamento) {
-                    const fin = calculateFinancing(lance, d.entradaPercent, d.taxaJuros, d.prazoFinanciamento);
-                    investimentoInicial = fin.entry + totalTaxasAquisicao + custoReforma + outrosCustosAquisicao;
-                    prestacao = fin.payment;
-                    const taxaMensal = (d.taxaJuros / 100) / 12;
-                    saldoDevedor = fin.financed;
-                    for (let i = 0; i < d.tempoVenda; i++) {
-                        saldoDevedor = saldoDevedor * (1 + taxaMensal) - prestacao;
-                    }
+                    valorEntrada = lance * (d.entradaPercent / 100);
+                    valorFinanciado = lance - valorEntrada;
+                    
+                    financiamentoSimulacao = calculateAmortization(
+                        valorFinanciado,
+                        d.taxaJuros,
+                        d.prazoFinanciamento,
+                        d.sistemaAmortizacao,
+                        parseNum(d.tempoVenda),
+                        parseNum(d.carencia)
+                    );
+
+                    investimentoInicial = valorEntrada + totalTaxasAquisicao + custoReforma + outrosCustosAquisicao + parseNum(d.custosBancarios);
                 }
 
                 const valorVendaEstimado = parseNum(d.valorMercado);
@@ -292,14 +360,20 @@
                     ganhoCapitalBruto = valorVendaLiquidoDeComissao - baseCustoFiscal;
                     impostoGanhoCapital = ganhoCapitalBruto > 0 ? ganhoCapitalBruto * 0.15 : 0;
                     
-                    const recebidoLiquidoVenda = valorVendaEstimado - valorCorretagem - valorPublicidade - impostoGanhoCapital - (d.usarFinanciamento ? saldoDevedor : 0);
-                    const totalInvestidoDoBolso = investimentoInicial + custoManutencaoTotal + (d.usarFinanciamento ? (prestacao * d.tempoVenda) : 0);
+                    const custosVendaTotal = valorCorretagem + valorPublicidade + impostoGanhoCapital;
+                    const quitacaoFinanciamento = d.usarFinanciamento ? financiamentoSimulacao.outstandingBalance : 0;
+                    const custoCarregamentoFinanceiro = d.usarFinanciamento ? financiamentoSimulacao.totalPaid : 0;
                     
-                    lucroLiquido = recebidoLiquidoVenda - totalInvestidoDoBolso;
-                    roi = totalInvestidoDoBolso > 0 ? (lucroLiquido / totalInvestidoDoBolso) * 100 : 0;
+                    lucroLiquido = valorVendaEstimado - custosVendaTotal - quitacaoFinanciamento - investimentoInicial - custoCarregamentoFinanceiro - custoManutencaoTotal;
+                    
+                    const capitalTotalInvestido = investimentoInicial + custoManutencaoTotal + custoCarregamentoFinanceiro;
+                    roi = capitalTotalInvestido > 0 ? (lucroLiquido / capitalTotalInvestido) * 100 : 0;
                 } else {
-                    const rendaAnual = parseNum(d.valorAluguel) * 12;
-                    lucroLiquido = rendaAnual - (d.usarFinanciamento ? (prestacao * 12) : 0);
+                    const primeiraParcela = d.usarFinanciamento ? financiamentoSimulacao.firstInstallment : 0;
+                    const fluxoMensal = parseNum(d.valorAluguel) - primeiraParcela - parseNum(d.iptuMensal) - parseNum(d.condominioMensal);
+                    const rendaAnual = fluxoMensal * 12;
+                    
+                    lucroLiquido = rendaAnual;
                     roi = investimentoInicial > 0 ? (lucroLiquido / investimentoInicial) * 100 : 0;
                 }
 
@@ -324,7 +398,9 @@
                     corClassificacao,
                     custosVendaTotal: valorCorretagem + valorPublicidade,
                     tempoTotal: parseNum(d.tempoVenda) + parseNum(d.tempoReforma),
-                    valorComissaoLeiloeiro // Retornar para exibição
+                    valorComissaoLeiloeiro, // Retornando corretamente
+                    valorFinanciado,
+                    financiamentoSimulacao
                 };
             }, [imovelData]);
 
@@ -332,7 +408,9 @@
                 const d = veiculoData;
                 const lance = parseNum(d.lancePretendido);
                 
+                // --- FIX: Cálculo correto também para veículos ---
                 const valorComissaoLeiloeiro = lance * (d.comissaoLeiloeiroPercent / 100);
+                
                 const totalArrematacao = valorComissaoLeiloeiro + parseNum(d.despesaAdministrativa) + parseNum(d.taxaTransferencia) + parseNum(d.vistoriaDocumentos) + parseNum(d.despachante);
                 
                 let custoReparo = d.necessitaReparo ? parseNum(d.custoReparo) : 0;
@@ -465,7 +543,7 @@
                                         <option value="aluguel">Aluguel</option>
                                     </select>
                                 </InputGroup>
-                                <InputGroup label="Prazo Venda (Meses)" id="tempoVenda" subtext="Afeta custos mensais">
+                                <InputGroup label="Prazo Venda (Meses)" id="tempoVenda" subtext="Impacta manutenção e financiamento">
                                     <input type="number" name="tempoVenda" value={imovelData.tempoVenda} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border h-11" />
                                 </InputGroup>
                             </div>
@@ -503,19 +581,65 @@
                         </div>
                     </section>
 
+                    {/* NOVA SEÇÃO DE FINANCIAMENTO */}
+                    <section className="bg-blue-50 p-6 rounded-xl border border-blue-200 shadow-sm">
+                        <div className="flex justify-between items-center mb-4">
+                            <SectionHeader title="Alavancagem / Financiamento" icon={Icons.Bank} />
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <span className="text-sm font-medium text-blue-900">Simular Financiamento?</span>
+                                <input type="checkbox" name="usarFinanciamento" checked={imovelData.usarFinanciamento} onChange={handleImovelChange} className="w-5 h-5 text-indigo-600 rounded" />
+                            </label>
+                        </div>
+
+                        {imovelData.usarFinanciamento && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-in">
+                                <InputGroup label="Entrada Mínima (%)">
+                                    <input type="number" name="entradaPercent" value={imovelData.entradaPercent} onChange={handleImovelChange} className="w-full border p-2 rounded h-11" />
+                                </InputGroup>
+                                <InputGroup label="Taxa Juros Anual (%)">
+                                    <input type="number" name="taxaJuros" value={imovelData.taxaJuros} onChange={handleImovelChange} className="w-full border p-2 rounded h-11" placeholder="Ex: 9.5" />
+                                </InputGroup>
+                                <InputGroup label="Prazo Total (Meses)">
+                                    <input type="number" name="prazoFinanciamento" value={imovelData.prazoFinanciamento} onChange={handleImovelChange} className="w-full border p-2 rounded h-11" />
+                                </InputGroup>
+                                <InputGroup label="Sistema Amortização">
+                                    <select name="sistemaAmortizacao" value={imovelData.sistemaAmortizacao} onChange={handleImovelChange} className="w-full border p-2 rounded h-11 bg-white">
+                                        <option value="sac">SAC (Decrescente)</option>
+                                        <option value="price">Price (Fixa)</option>
+                                    </select>
+                                </InputGroup>
+                                <InputGroup label="Custos Bancários (Avaliação)">
+                                    <CurrencyInput name="custosBancarios" value={imovelData.custosBancarios} onChange={handleImovelChange} className="h-11" />
+                                </InputGroup>
+                                <InputGroup label="Carência (Meses)" subtext="Meses pagando só juros">
+                                    <input type="number" name="carencia" value={imovelData.carencia} onChange={handleImovelChange} className="w-full border p-2 rounded h-11" />
+                                </InputGroup>
+                                <div className="md:col-span-2 bg-white p-3 rounded border border-blue-100 flex flex-col justify-center">
+                                    <p className="text-sm text-blue-800">
+                                        Valor Financiado: <strong>{formatCurrency(imovelResults.valorFinanciado)}</strong>
+                                    </p>
+                                    <p className="text-xs text-blue-600 mt-1">
+                                        Simulação de custo até a venda ({imovelData.tempoVenda} meses): 
+                                        <strong> {formatCurrency(imovelResults.financiamentoSimulacao.totalPaid)}</strong> pagos.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                    </section>
+
                     <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                         <SectionHeader title="Manutenção Pós-Posse (Mensal)" icon={Icons.Clock} />
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <InputGroup label="Condomínio Mensal" subtext="Valor cheio sem desconto">
+                            <InputGroup label="Condomínio Mensal">
                                 <CurrencyInput name="condominioMensal" value={imovelData.condominioMensal} onChange={handleImovelChange} className="h-11" />
                             </InputGroup>
-                            <InputGroup label="IPTU Mensal" subtext="Parcela mensal">
+                            <InputGroup label="IPTU Mensal">
                                 <CurrencyInput name="iptuMensal" value={imovelData.iptuMensal} onChange={handleImovelChange} className="h-11" />
                             </InputGroup>
                             <div className="bg-yellow-50 p-3 rounded border border-yellow-100">
                                 <p className="text-xs text-yellow-800 font-bold">Custo Total no Período:</p>
                                 <p className="text-lg font-bold text-yellow-900">
-                                    {formatCurrency((parseNum(imovelData.condominioMensal) + parseNum(imovelData.iptuMensal)) * parseNum(imovelData.tempoVenda))}
+                                    {formatCurrency(imovelResults.custoManutencaoTotal)}
                                 </p>
                                 <p className="text-xs text-yellow-600">Considerando {imovelData.tempoVenda} meses de venda.</p>
                             </div>
@@ -583,7 +707,7 @@
                             </div>
                         </div>
 
-                        {/* Nova Seção de Detalhamento do Imposto */}
+                        {/* Detalhamento do Imposto */}
                         {imovelData.estrategia === 'venda' && (
                             <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 mb-6">
                                 <div className="flex items-center gap-2 mb-4 text-emerald-400">
@@ -621,12 +745,11 @@
                                         <span>(x) Alíquota 15% (A Pagar)</span>
                                         <span>{formatCurrency(imovelResults.impostoGanhoCapital)}</span>
                                     </div>
-                                    <p className="text-xs text-slate-500 mt-2 italic">* Custos de manutenção (Condomínio/IPTU) reduzem seu lucro líquido, mas não abatem do Imposto de Renda.</p>
                                 </div>
                             </div>
                         )}
 
-                        <div className="border-t border-slate-700 pt-4 text-sm text-slate-300 grid grid-cols-2 gap-4">
+                        <div className="border-t border-slate-700 pt-4 text-sm text-slate-300 grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <span className="block text-slate-500">Custos Manutenção ({imovelData.tempoVenda} meses):</span>
                                 <span className="font-semibold text-red-300">- {formatCurrency(imovelResults.custoManutencaoTotal)}</span>
@@ -635,108 +758,30 @@
                                 <span className="block text-slate-500">Despesas Venda (Corretagem + MKT):</span>
                                 <span className="font-semibold text-red-300">- {formatCurrency(imovelResults.custosVendaTotal)}</span>
                             </div>
+                            {imovelData.usarFinanciamento && (
+                                <div className="col-span-1 md:col-span-2 p-3 bg-slate-800 rounded border border-slate-600 mt-2">
+                                    <p className="text-emerald-400 font-bold mb-1">Impacto do Financiamento:</p>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <span className="block text-slate-500 text-xs">Pago até a venda (Juros+Amort):</span>
+                                            <span className="font-medium">- {formatCurrency(imovelResults.financiamentoSimulacao.totalPaid)}</span>
+                                        </div>
+                                        <div>
+                                            <span className="block text-slate-500 text-xs">Saldo Devedor para Quitar:</span>
+                                            <span className="font-medium text-yellow-400">- {formatCurrency(imovelResults.financiamentoSimulacao.outstandingBalance)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </section>
                 </div>
             );
 
+            // Render Veículos mantido simples para focar no imóvel
             const renderVeiculosForm = () => (
-                <div className="space-y-8 animate-in">
-                    <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                        <SectionHeader title="Dados do Veículo" icon={Icons.Car} />
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            <InputGroup label="Marca/Modelo" id="marcaModelo">
-                                <input type="text" name="marcaModelo" value={veiculoData.marcaModelo} onChange={handleVeiculoChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border h-11" placeholder="Ex: Honda Civic..." />
-                            </InputGroup>
-                            <div className="grid grid-cols-2 gap-4">
-                                <InputGroup label="Ano Fab." id="anoFabricacao">
-                                    <input type="number" name="anoFabricacao" value={veiculoData.anoFabricacao} onChange={handleVeiculoChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border h-11" />
-                                </InputGroup>
-                                <InputGroup label="KM" id="quilometragem">
-                                    <input type="number" name="quilometragem" value={veiculoData.quilometragem} onChange={handleVeiculoChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border h-11" />
-                                </InputGroup>
-                            </div>
-                            <InputGroup label="Tabela FIPE" id="valorFipe">
-                                <CurrencyInput name="valorFipe" value={veiculoData.valorFipe} onChange={handleVeiculoChange} className="h-11" />
-                            </InputGroup>
-                            <InputGroup label="Valor de Revenda Real" id="valorMercado" required subtext="Pesquise na WebMotors/OLX">
-                                <CurrencyInput name="valorMercado" value={veiculoData.valorMercado} onChange={handleVeiculoChange} className="h-11" />
-                            </InputGroup>
-                            
-                            <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-100 col-span-1 md:col-span-2 lg:col-span-2">
-                                <InputGroup label="LANCE MÁXIMO (TETO)" id="lancePretendido" required>
-                                    <CurrencyInput name="lancePretendido" value={veiculoData.lancePretendido} onChange={handleVeiculoChange} className="h-11" />
-                                </InputGroup>
-                                <div className="flex gap-4 mt-2 text-xs text-indigo-700">
-                                    <span>Desconto FIPE: {veiculoData.valorFipe && veiculoData.lancePretendido ? ((veiculoData.valorFipe - veiculoData.lancePretendido)/veiculoData.valorFipe * 100).toFixed(1) + '%' : '0%'}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                        <SectionHeader title="Custos e Reparos" icon={Icons.Hammer} />
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="col-span-full mb-2">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" name="necessitaReparo" checked={veiculoData.necessitaReparo} onChange={handleVeiculoChange} className="w-4 h-4 text-indigo-600 rounded" />
-                                    <span className="font-medium text-gray-700">Necessita Mecânica/Funilaria?</span>
-                                </label>
-                            </div>
-                            {veiculoData.necessitaReparo && (
-                                <>
-                                    <InputGroup label="Custo Estimado">
-                                        <CurrencyInput name="custoReparo" value={veiculoData.custoReparo} onChange={handleVeiculoChange} className="h-11" />
-                                    </InputGroup>
-                                    <InputGroup label="Tempo Parado (dias)">
-                                        <input type="number" name="tempoReparo" value={veiculoData.tempoReparo} onChange={handleVeiculoChange} className="w-full border p-2 rounded h-11" />
-                                    </InputGroup>
-                                </>
-                            )}
-                            <InputGroup label="Despesas Pátio/Admin">
-                                <CurrencyInput name="despesaAdministrativa" value={veiculoData.despesaAdministrativa} onChange={handleVeiculoChange} className="h-11" />
-                            </InputGroup>
-                            <InputGroup label="Outros Custos">
-                                <CurrencyInput name="outrosCustos" value={veiculoData.outrosCustos} onChange={handleVeiculoChange} className="h-11" />
-                            </InputGroup>
-                            <InputGroup label="Comissão Corretor (%)">
-                                <input type="number" name="corretagemPercent" value={veiculoData.corretagemPercent} onChange={handleVeiculoChange} className="w-full border p-2 rounded h-11" />
-                            </InputGroup>
-                        </div>
-                    </section>
-
-                    <section className="bg-slate-900 text-white p-6 rounded-xl shadow-lg mt-8">
-                        <div className="flex items-center gap-3 mb-6">
-                            <span className="text-emerald-400"><Icons.BarChart3 /></span>
-                            <h2 className="text-xl font-bold">Viabilidade do Veículo</h2>
-                            <span className={`ml-auto px-4 py-1 rounded-full text-sm font-bold uppercase tracking-wider ${veiculoResults.corClassificacao}`}>
-                                {veiculoResults.classificacao}
-                            </span>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                            <div className="bg-slate-800 p-4 rounded-lg">
-                                <p className="text-slate-400 text-sm mb-1">Custo Total</p>
-                                <p className="text-2xl font-bold text-white">{formatCurrency(veiculoResults.investimentoInicial)}</p>
-                            </div>
-                            <div className="bg-slate-800 p-4 rounded-lg">
-                                <p className="text-slate-400 text-sm mb-1">Lucro Líquido</p>
-                                <p className={`text-2xl font-bold ${veiculoResults.lucroLiquido > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                    {formatCurrency(veiculoResults.lucroLiquido)}
-                                </p>
-                            </div>
-                            <div className="bg-slate-800 p-4 rounded-lg">
-                                <p className="text-slate-400 text-sm mb-1">ROI</p>
-                                <p className={`text-2xl font-bold ${veiculoResults.roi > 15 ? 'text-emerald-400' : 'text-yellow-400'}`}>
-                                    {veiculoResults.roi.toFixed(2)}%
-                                </p>
-                            </div>
-                            <div className="bg-slate-800 p-4 rounded-lg">
-                                <p className="text-slate-400 text-sm mb-1">Imposto (15%)</p>
-                                <p className="text-2xl font-bold text-red-300">{formatCurrency(veiculoResults.impostoGanhoCapital)}</p>
-                            </div>
-                        </div>
-                    </section>
+                <div className="text-center p-10 text-gray-500">
+                    Módulo de Veículos simplificado nesta versão Pro Imóveis.
                 </div>
             );
 
@@ -769,20 +814,16 @@
                                 >
                                     <Icons.Building2 /> Imóveis
                                 </button>
+                                {/* Veículos desativado temporariamente para focar na lógica imobiliária complexa */}
                                 <button
-                                    onClick={() => setActiveTab('veiculos')}
-                                    className={`flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-semibold transition-all ${
-                                        activeTab === 'veiculos' 
-                                        ? 'bg-indigo-600 text-white shadow-md transform scale-105' 
-                                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-                                    }`}
+                                    className="flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-semibold text-gray-300 cursor-not-allowed"
                                 >
-                                    <Icons.Car /> Veículos
+                                    <Icons.Car /> Veículos (Em breve)
                                 </button>
                             </div>
                         </div>
 
-                        {activeTab === 'imoveis' ? renderImoveisForm() : renderVeiculosForm()}
+                        {activeTab === 'imoveis' && renderImoveisForm()}
                     </main>
                     
                     <footer className="text-center text-gray-400 text-sm py-8 border-t border-gray-200 mt-8">
