@@ -32,6 +32,11 @@
         body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
         .animate-in { animation: fadeIn 0.5s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Ajuste fino para selects e inputs */
+        select, input {
+            font-size: 0.95rem;
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-900">
@@ -63,15 +68,16 @@
 
         const InputGroup = ({ label, id, children, required, subtext }) => (
             <div className="flex flex-col gap-1">
-                <label htmlFor={id} className="text-sm font-medium text-gray-700 flex justify-between">
+                <label htmlFor={id} className="text-sm font-medium text-gray-700 flex justify-between items-end h-5">
                     <span>{label} {required && <span className="text-red-500">*</span>}</span>
                 </label>
                 {children}
-                {subtext && <span className="text-xs text-gray-500">{subtext}</span>}
+                {/* Altura fixa para o subtexto garantir alinhamento mesmo se vazio */}
+                <span className="text-xs text-gray-500 h-4 block truncate">{subtext || ''}</span>
             </div>
         );
 
-        const CurrencyInput = ({ value, onChange, name, placeholder, readOnly = false }) => (
+        const CurrencyInput = ({ value, onChange, name, placeholder, readOnly = false, className = "" }) => (
             <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <span className="text-gray-500 sm:text-sm">R$</span>
@@ -83,7 +89,7 @@
                     onChange={onChange}
                     placeholder={placeholder}
                     readOnly={readOnly}
-                    className={`block w-full pl-10 pr-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md border ${readOnly ? 'bg-gray-100 text-gray-500' : 'bg-white'}`}
+                    className={`block w-full pl-10 pr-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md border ${readOnly ? 'bg-gray-100 text-gray-500' : 'bg-white'} ${className}`}
                 />
             </div>
         );
@@ -92,7 +98,7 @@
         const App = () => {
             const [activeTab, setActiveTab] = useState('imoveis');
             
-            // Estado Imóveis (Atualizado com campos da planilha)
+            // Estado Imóveis
             const [imovelData, setImovelData] = useState({
                 endereco: '',
                 tipo: 'apartamento',
@@ -112,35 +118,29 @@
                 valorAluguel: '',
                 lancePretendido: '',
                 
-                // Custos Aquisição
+                // Custos
                 taxaItbi: 3.0,
                 registroCartorio: 2850,
-                advogado: 1900, // Advogado Desocupação/Assessoria
+                advogado: 1900,
                 certidoesDocumentos: 500,
                 vistoriaTecnica: 800,
                 seguroGarantia: 950,
-                
-                // Manutenção (Novos campos da planilha)
                 iptuMensal: '',
                 condominioMensal: '',
                 outrosCustos: '',
                 
-                // Reforma
+                // Reforma/Financ
                 necessitaReforma: false,
                 tipoReforma: 'basica',
                 custoM2: 200,
                 tempoReforma: 3,
-                
-                // Financiamento
                 usarFinanciamento: false,
                 entradaPercent: 20,
                 taxaJuros: 10.5,
                 prazoFinanciamento: 20,
-                
-                // Venda
                 corretagemPercent: 6,
                 publicidade: 2000,
-                tipoPessoa: 'pf' // PF = 15% Ganho Capital
+                tipoPessoa: 'pf'
             });
 
             // Estado Veículos
@@ -196,7 +196,7 @@
                 }));
             };
 
-            // Cálculos Auxiliares
+            // Cálculos
             const formatCurrency = (value) => {
                 if (!value && value !== 0) return 'R$ 0,00';
                 return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -216,31 +216,22 @@
                 return { entry, financed, payment };
             };
 
-            // Resultados Imóveis (Atualizado com lógica da planilha)
             const imovelResults = useMemo(() => {
                 const d = imovelData;
                 const lance = parseNum(d.lancePretendido);
-                
-                // 1. Custos da Arrematação
                 const comissao = lance * 0.05;
                 const itbi = lance * (d.taxaItbi / 100);
                 const totalArrematacao = comissao + itbi + parseNum(d.registroCartorio) + parseNum(d.certidoesDocumentos) + parseNum(d.advogado) + parseNum(d.vistoriaTecnica) + parseNum(d.seguroGarantia);
 
-                // 2. Reforma e Outros Extras
                 let custoReforma = 0;
                 if (d.necessitaReforma) {
                     const fator = d.tipoReforma === 'basica' ? 1 : d.tipoReforma === 'intermediaria' ? 1.3 : 1.6;
                     custoReforma = parseNum(d.metragem) * parseNum(d.custoM2) * fator;
                 }
                 const outrosCustos = parseNum(d.outrosCustos);
-
-                // 3. Manutenção Pós-Posse (Planilha: Pós Posse)
-                // Soma mensal de condomínio e IPTU multiplicada pelo tempo de venda
                 const manutencaoMensal = parseNum(d.iptuMensal) + parseNum(d.condominioMensal);
                 const custoManutencaoTotal = manutencaoMensal * parseNum(d.tempoVenda);
 
-                // 4. Investimento Inicial (Cash necessário na frente)
-                // Se financiar, conta só a entrada + taxas + reforma (assume-se manutencao paga mensalmente com fluxo)
                 let investimentoInicial = lance + totalArrematacao + custoReforma + outrosCustos;
                 let prestacao = 0;
                 let saldoDevedor = 0;
@@ -249,8 +240,6 @@
                     const fin = calculateFinancing(lance, d.entradaPercent, d.taxaJuros, d.prazoFinanciamento);
                     investimentoInicial = fin.entry + totalArrematacao + custoReforma + outrosCustos;
                     prestacao = fin.payment;
-                    
-                    // Calcula saldo devedor aproximado no mês da venda para quitar
                     const taxaMensal = (d.taxaJuros / 100) / 12;
                     saldoDevedor = fin.financed;
                     for (let i = 0; i < d.tempoVenda; i++) {
@@ -259,8 +248,6 @@
                 }
 
                 const valorVendaEstimado = parseNum(d.valorMercado);
-                
-                // 5. Despesas de Venda
                 const custosVenda = (valorVendaEstimado * d.corretagemPercent / 100) + parseNum(d.publicidade);
                 
                 let lucroLiquido = 0;
@@ -268,30 +255,16 @@
                 let impostoGanhoCapital = 0;
                 
                 if (d.estrategia === 'venda') {
-                    // Custo Total para base de cálculo do imposto (Aquisição + Melhorias)
-                    // Manutenção geralmente não abate ganho de capital PF, mas vamos seguir a lógica contábil de lucro do projeto
                     const custoTotalBase = lance + totalArrematacao + custoReforma + custosVenda + outrosCustos; 
                     const ganhoBruto = valorVendaEstimado - custoTotalBase;
-                    
-                    // Imposto 15% sobre o ganho (Planilha)
                     impostoGanhoCapital = ganhoBruto > 0 ? ganhoBruto * 0.15 : 0;
-                    
-                    // Recebimento Líquido da Venda
                     const recebidoVenda = valorVendaEstimado - custosVenda - impostoGanhoCapital - (d.usarFinanciamento ? saldoDevedor : 0);
-                    
-                    // Lucro do Projeto = (Recebido - Investido - Custos Manutenção Pagos ao longo do tempo - Parcelas Pagas)
                     const parcelasPagas = d.usarFinanciamento ? (prestacao * d.tempoVenda) : 0;
-                    
                     lucroLiquido = recebidoVenda - investimentoInicial - custoManutencaoTotal - parcelasPagas;
-                    
-                    // ROI = Lucro / (Dinheiro que saiu do bolso)
                     const capitalInvestido = investimentoInicial + custoManutencaoTotal + parcelasPagas;
                     roi = capitalInvestido > 0 ? (lucroLiquido / capitalInvestido) * 100 : 0;
                 } else {
-                    // Aluguel
                     const rendaAnual = parseNum(d.valorAluguel) * 12;
-                    // No aluguel, subtrai-se custos mensais (IPTU/Cond) se forem pagos pelo proprietário (vacância), 
-                    // mas aqui assumimos renda líquida ou bruta conforme input.
                     lucroLiquido = rendaAnual - (d.usarFinanciamento ? (prestacao * 12) : 0);
                     roi = investimentoInicial > 0 ? (lucroLiquido / investimentoInicial) * 100 : 0;
                 }
@@ -321,17 +294,13 @@
                 };
             }, [imovelData]);
 
-            // Resultados Veículos (Similar update)
             const veiculoResults = useMemo(() => {
                 const d = veiculoData;
                 const lance = parseNum(d.lancePretendido);
-
                 const comissao = lance * 0.05;
                 const totalArrematacao = comissao + parseNum(d.despesaAdministrativa) + parseNum(d.taxaTransferencia) + parseNum(d.vistoriaDocumentos) + parseNum(d.despachante);
-
                 let custoReparo = d.necessitaReparo ? parseNum(d.custoReparo) : 0;
                 const outrosCustos = parseNum(d.outrosCustos);
-
                 let investimentoInicial = lance + totalArrematacao + custoReparo + outrosCustos;
                 let prestacao = 0;
                 let saldoDevedor = 0;
@@ -340,7 +309,6 @@
                     const fin = calculateFinancing(lance, d.entradaPercent, d.taxaJuros, d.prazoFinanciamento);
                     investimentoInicial = fin.entry + totalArrematacao + custoReparo + outrosCustos;
                     prestacao = fin.payment;
-                    
                     const taxaMensal = (d.taxaJuros / 100) / 12;
                     saldoDevedor = fin.financed;
                     for (let i = 0; i < d.tempoVenda; i++) {
@@ -350,7 +318,6 @@
 
                 const valorVendaEstimado = parseNum(d.valorMercado) * 0.95;
                 const custosVenda = (valorVendaEstimado * d.corretagemPercent / 100) + parseNum(d.publicidade);
-
                 let lucroLiquido = 0;
                 let roi = 0;
                 let impostoGanhoCapital = 0;
@@ -358,12 +325,9 @@
                 if (d.estrategia === 'venda') {
                     const custoTotalBase = lance + totalArrematacao + custoReparo + custosVenda + outrosCustos;
                     const ganhoBruto = valorVendaEstimado - custoTotalBase;
-                    
                     impostoGanhoCapital = ganhoBruto > 0 ? ganhoBruto * 0.15 : 0;
-
                     const recebidoLiquido = valorVendaEstimado - custosVenda - impostoGanhoCapital - (d.usarFinanciamento ? saldoDevedor : 0);
                     const parcelasPagas = d.usarFinanciamento ? (prestacao * d.tempoVenda) : 0;
-                    
                     lucroLiquido = recebidoLiquido - investimentoInicial - parcelasPagas;
                     const capitalInvestido = investimentoInicial + parcelasPagas;
                     roi = capitalInvestido > 0 ? (lucroLiquido / capitalInvestido) * 100 : 0;
@@ -403,10 +367,10 @@
                         <SectionHeader title="Dados do Imóvel" icon={Icons.Building2} />
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             <InputGroup label="Endereço" id="endereco">
-                                <input type="text" name="endereco" value={imovelData.endereco} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border" placeholder="Logradouro, Bairro..." />
+                                <input type="text" name="endereco" value={imovelData.endereco} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border h-11" placeholder="Logradouro, Bairro..." />
                             </InputGroup>
                             <InputGroup label="Tipo" id="tipo">
-                                <select name="tipo" value={imovelData.tipo} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border">
+                                <select name="tipo" value={imovelData.tipo} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border h-11 bg-white">
                                     <option value="apartamento">Apartamento</option>
                                     <option value="casa">Casa</option>
                                     <option value="comercial">Comercial</option>
@@ -415,14 +379,14 @@
                             </InputGroup>
                             <div className="grid grid-cols-2 gap-4">
                                 <InputGroup label="Área (m²)" id="metragem">
-                                    <input type="number" name="metragem" value={imovelData.metragem} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border" />
+                                    <input type="number" name="metragem" value={imovelData.metragem} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border h-11" />
                                 </InputGroup>
                                 <InputGroup label="Quartos" id="quartos">
-                                    <input type="number" name="quartos" value={imovelData.quartos} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border" />
+                                    <input type="number" name="quartos" value={imovelData.quartos} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border h-11" />
                                 </InputGroup>
                             </div>
                             <InputGroup label="Conservação" id="conservacao">
-                                <select name="conservacao" value={imovelData.conservacao} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border">
+                                <select name="conservacao" value={imovelData.conservacao} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border h-11 bg-white">
                                     <option value="excelente">Excelente</option>
                                     <option value="bom">Bom</option>
                                     <option value="regular">Regular</option>
@@ -430,7 +394,7 @@
                                 </select>
                             </InputGroup>
                             <InputGroup label="Valor Avaliação" id="valorAvaliacao">
-                                <CurrencyInput name="valorAvaliacao" value={imovelData.valorAvaliacao} onChange={handleImovelChange} />
+                                <CurrencyInput name="valorAvaliacao" value={imovelData.valorAvaliacao} onChange={handleImovelChange} className="h-11" />
                             </InputGroup>
                         </div>
                     </section>
@@ -439,12 +403,12 @@
                         <SectionHeader title="Valores e Estratégia" icon={Icons.TrendingUp} />
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             <InputGroup label="Valor de Mercado" id="valorMercado" required>
-                                <CurrencyInput name="valorMercado" value={imovelData.valorMercado} onChange={handleImovelChange} />
+                                <CurrencyInput name="valorMercado" value={imovelData.valorMercado} onChange={handleImovelChange} className="h-11" />
                             </InputGroup>
                             
                             <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-100 col-span-1 md:col-span-2 lg:col-span-2">
                                 <InputGroup label="SEU LANCE MÁXIMO PRETENDIDO" id="lancePretendido" required>
-                                    <CurrencyInput name="lancePretendido" value={imovelData.lancePretendido} onChange={handleImovelChange} />
+                                    <CurrencyInput name="lancePretendido" value={imovelData.lancePretendido} onChange={handleImovelChange} className="h-11" />
                                 </InputGroup>
                                 <div className="flex gap-4 mt-2 text-xs text-indigo-700">
                                     <span>Desconto Mercado: {imovelData.valorMercado && imovelData.lancePretendido ? ((imovelData.valorMercado - imovelData.lancePretendido)/imovelData.valorMercado * 100).toFixed(1) + '%' : '0%'}</span>
@@ -452,21 +416,21 @@
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <InputGroup label="Estratégia" id="estrategia">
-                                    <select name="estrategia" value={imovelData.estrategia} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border">
+                            <div className="grid grid-cols-2 gap-4 items-start">
+                                <InputGroup label="Estratégia" id="estrategia" subtext="Defina o objetivo">
+                                    <select name="estrategia" value={imovelData.estrategia} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border h-11 bg-white">
                                         <option value="venda">Revenda</option>
                                         <option value="aluguel">Aluguel</option>
                                     </select>
                                 </InputGroup>
-                                <InputGroup label="Tempo Venda (Meses)" id="tempoVenda" subtext="Afeta custos mensais">
-                                    <input type="number" name="tempoVenda" value={imovelData.tempoVenda} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border" />
+                                <InputGroup label="Prazo Venda (Meses)" id="tempoVenda" subtext="Afeta custos mensais">
+                                    <input type="number" name="tempoVenda" value={imovelData.tempoVenda} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border h-11" />
                                 </InputGroup>
                             </div>
 
                             {imovelData.estrategia === 'aluguel' && (
                                 <InputGroup label="Valor Aluguel Mensal" id="valorAluguel">
-                                    <CurrencyInput name="valorAluguel" value={imovelData.valorAluguel} onChange={handleImovelChange} />
+                                    <CurrencyInput name="valorAluguel" value={imovelData.valorAluguel} onChange={handleImovelChange} className="h-11" />
                                 </InputGroup>
                             )}
 
@@ -479,17 +443,17 @@
                                 {imovelData.necessitaReforma && (
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-50 p-4 rounded-lg">
                                         <InputGroup label="Nível">
-                                            <select name="tipoReforma" value={imovelData.tipoReforma} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md p-2 border">
+                                            <select name="tipoReforma" value={imovelData.tipoReforma} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md p-2 border h-11 bg-white">
                                                 <option value="basica">Básica (Pintura)</option>
                                                 <option value="intermediaria">Média (Pisos)</option>
                                                 <option value="completa">Completa</option>
                                             </select>
                                         </InputGroup>
                                         <InputGroup label="Custo Est. (R$/m²)">
-                                            <CurrencyInput name="custoM2" value={imovelData.custoM2} onChange={handleImovelChange} />
+                                            <CurrencyInput name="custoM2" value={imovelData.custoM2} onChange={handleImovelChange} className="h-11" />
                                         </InputGroup>
                                         <InputGroup label="Duração (meses)">
-                                            <input type="number" name="tempoReforma" value={imovelData.tempoReforma} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md p-2 border" />
+                                            <input type="number" name="tempoReforma" value={imovelData.tempoReforma} onChange={handleImovelChange} className="w-full border-gray-300 rounded-md p-2 border h-11" />
                                         </InputGroup>
                                     </div>
                                 )}
@@ -501,10 +465,10 @@
                         <SectionHeader title="Manutenção Pós-Posse (Mensal)" icon={Icons.Clock} />
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <InputGroup label="Condomínio Mensal" subtext="Valor cheio sem desconto">
-                                <CurrencyInput name="condominioMensal" value={imovelData.condominioMensal} onChange={handleImovelChange} />
+                                <CurrencyInput name="condominioMensal" value={imovelData.condominioMensal} onChange={handleImovelChange} className="h-11" />
                             </InputGroup>
                             <InputGroup label="IPTU Mensal" subtext="Parcela mensal">
-                                <CurrencyInput name="iptuMensal" value={imovelData.iptuMensal} onChange={handleImovelChange} />
+                                <CurrencyInput name="iptuMensal" value={imovelData.iptuMensal} onChange={handleImovelChange} className="h-11" />
                             </InputGroup>
                             <div className="bg-yellow-50 p-3 rounded border border-yellow-100">
                                 <p className="text-xs text-yellow-800 font-bold">Custo Total no Período:</p>
@@ -524,16 +488,16 @@
                             </summary>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 animate-in">
                                 <InputGroup label="ITBI (%)">
-                                    <input type="number" name="taxaItbi" value={imovelData.taxaItbi} onChange={handleImovelChange} className="w-full border p-2 rounded" />
+                                    <input type="number" name="taxaItbi" value={imovelData.taxaItbi} onChange={handleImovelChange} className="w-full border p-2 rounded h-11" />
                                 </InputGroup>
                                 <InputGroup label="Registro (R$)">
-                                    <CurrencyInput name="registroCartorio" value={imovelData.registroCartorio} onChange={handleImovelChange} />
+                                    <CurrencyInput name="registroCartorio" value={imovelData.registroCartorio} onChange={handleImovelChange} className="h-11" />
                                 </InputGroup>
                                 <InputGroup label="Advogado Desocupação (R$)">
-                                    <CurrencyInput name="advogado" value={imovelData.advogado} onChange={handleImovelChange} />
+                                    <CurrencyInput name="advogado" value={imovelData.advogado} onChange={handleImovelChange} className="h-11" />
                                 </InputGroup>
                                 <InputGroup label="Outros Custos Extras">
-                                    <CurrencyInput name="outrosCustos" value={imovelData.outrosCustos} onChange={handleImovelChange} placeholder="Valor Total" />
+                                    <CurrencyInput name="outrosCustos" value={imovelData.outrosCustos} onChange={handleImovelChange} placeholder="Valor Total" className="h-11" />
                                 </InputGroup>
                             </div>
                         </details>
@@ -591,26 +555,26 @@
                         <SectionHeader title="Dados do Veículo" icon={Icons.Car} />
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             <InputGroup label="Marca/Modelo" id="marcaModelo">
-                                <input type="text" name="marcaModelo" value={veiculoData.marcaModelo} onChange={handleVeiculoChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border" placeholder="Ex: Honda Civic..." />
+                                <input type="text" name="marcaModelo" value={veiculoData.marcaModelo} onChange={handleVeiculoChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border h-11" placeholder="Ex: Honda Civic..." />
                             </InputGroup>
                             <div className="grid grid-cols-2 gap-4">
                                 <InputGroup label="Ano Fab." id="anoFabricacao">
-                                    <input type="number" name="anoFabricacao" value={veiculoData.anoFabricacao} onChange={handleVeiculoChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border" />
+                                    <input type="number" name="anoFabricacao" value={veiculoData.anoFabricacao} onChange={handleVeiculoChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border h-11" />
                                 </InputGroup>
                                 <InputGroup label="KM" id="quilometragem">
-                                    <input type="number" name="quilometragem" value={veiculoData.quilometragem} onChange={handleVeiculoChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border" />
+                                    <input type="number" name="quilometragem" value={veiculoData.quilometragem} onChange={handleVeiculoChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border h-11" />
                                 </InputGroup>
                             </div>
                             <InputGroup label="Tabela FIPE" id="valorFipe">
-                                <CurrencyInput name="valorFipe" value={veiculoData.valorFipe} onChange={handleVeiculoChange} />
+                                <CurrencyInput name="valorFipe" value={veiculoData.valorFipe} onChange={handleVeiculoChange} className="h-11" />
                             </InputGroup>
                             <InputGroup label="Valor de Revenda Real" id="valorMercado" required subtext="Pesquise na WebMotors/OLX">
-                                <CurrencyInput name="valorMercado" value={veiculoData.valorMercado} onChange={handleVeiculoChange} />
+                                <CurrencyInput name="valorMercado" value={veiculoData.valorMercado} onChange={handleVeiculoChange} className="h-11" />
                             </InputGroup>
                             
                             <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-100 col-span-1 md:col-span-2 lg:col-span-2">
                                 <InputGroup label="LANCE MÁXIMO (TETO)" id="lancePretendido" required>
-                                    <CurrencyInput name="lancePretendido" value={veiculoData.lancePretendido} onChange={handleVeiculoChange} />
+                                    <CurrencyInput name="lancePretendido" value={veiculoData.lancePretendido} onChange={handleVeiculoChange} className="h-11" />
                                 </InputGroup>
                                 <div className="flex gap-4 mt-2 text-xs text-indigo-700">
                                     <span>Desconto FIPE: {veiculoData.valorFipe && veiculoData.lancePretendido ? ((veiculoData.valorFipe - veiculoData.lancePretendido)/veiculoData.valorFipe * 100).toFixed(1) + '%' : '0%'}</span>
@@ -631,18 +595,18 @@
                             {veiculoData.necessitaReparo && (
                                 <>
                                     <InputGroup label="Custo Estimado">
-                                        <CurrencyInput name="custoReparo" value={veiculoData.custoReparo} onChange={handleVeiculoChange} />
+                                        <CurrencyInput name="custoReparo" value={veiculoData.custoReparo} onChange={handleVeiculoChange} className="h-11" />
                                     </InputGroup>
                                     <InputGroup label="Tempo Parado (dias)">
-                                        <input type="number" name="tempoReparo" value={veiculoData.tempoReparo} onChange={handleVeiculoChange} className="w-full border p-2 rounded" />
+                                        <input type="number" name="tempoReparo" value={veiculoData.tempoReparo} onChange={handleVeiculoChange} className="w-full border p-2 rounded h-11" />
                                     </InputGroup>
                                 </>
                             )}
                             <InputGroup label="Despesas Pátio/Admin">
-                                <CurrencyInput name="despesaAdministrativa" value={veiculoData.despesaAdministrativa} onChange={handleVeiculoChange} />
+                                <CurrencyInput name="despesaAdministrativa" value={veiculoData.despesaAdministrativa} onChange={handleVeiculoChange} className="h-11" />
                             </InputGroup>
                             <InputGroup label="Outros Custos">
-                                <CurrencyInput name="outrosCustos" value={veiculoData.outrosCustos} onChange={handleVeiculoChange} />
+                                <CurrencyInput name="outrosCustos" value={veiculoData.outrosCustos} onChange={handleVeiculoChange} className="h-11" />
                             </InputGroup>
                         </div>
                     </section>
