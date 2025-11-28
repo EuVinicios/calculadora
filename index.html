@@ -150,7 +150,7 @@
                     if (system === 'sac') {
                         amortization = principal / months; 
                         payment = amortization + interest;
-                    } else {
+                    } else if (system === 'price' || system === 'cdc') { // CDC usa Price normalmente
                         payment = (principal * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -months));
                         amortization = payment - interest;
                     }
@@ -259,8 +259,8 @@
                 entradaPercent: 30,
                 taxaJuros: 18.0,
                 prazoFinanciamento: 60,
-                sistemaAmortizacao: 'price',
-                custosBancarios: 1200,
+                sistemaAmortizacao: 'cdc', // Padrão CDC para veículos
+                custosBancarios: 0, // CDC geralmente não tem taxa de abertura explicita
                 carencia: 0,
                 corretagemPercent: 3,
                 publicidade: 800,
@@ -269,17 +269,33 @@
 
             const handleImovelChange = (e) => {
                 const { name, value, type, checked } = e.target;
+                
+                // Lógica especial para CDC: Zerar custos bancários se selecionado
+                let newValues = { [name]: type === 'checkbox' ? checked : (type === 'number' && value !== '' ? parseFloat(value) : value) };
+                
+                if (name === 'sistemaAmortizacao' && value === 'cdc') {
+                    newValues.custosBancarios = 0;
+                }
+
                 setImovelData(prev => ({
                     ...prev,
-                    [name]: type === 'checkbox' ? checked : (type === 'number' && value !== '' ? parseFloat(value) : value)
+                    ...newValues
                 }));
             };
 
             const handleVeiculoChange = (e) => {
                 const { name, value, type, checked } = e.target;
+                
+                // Lógica especial para CDC: Zerar custos bancários se selecionado
+                let newValues = { [name]: type === 'checkbox' ? checked : (type === 'number' && value !== '' ? parseFloat(value) : value) };
+                
+                if (name === 'sistemaAmortizacao' && value === 'cdc') {
+                    newValues.custosBancarios = 0;
+                }
+
                 setVeiculoData(prev => ({
                     ...prev,
-                    [name]: type === 'checkbox' ? checked : (type === 'number' && value !== '' ? parseFloat(value) : value)
+                    ...newValues
                 }));
             };
 
@@ -306,13 +322,10 @@
                 const d = imovelData;
                 const lance = parseNum(d.lancePretendido);
                 
-                // --- FIX: Cálculo correto usando a porcentagem do estado e definição da variável ---
                 const valorComissaoLeiloeiro = lance * (d.comissaoLeiloeiroPercent / 100);
                 
                 const itbi = lance * (d.taxaItbi / 100);
                 const outrosCustosAquisicao = parseNum(d.outrosCustos); 
-                
-                // Usando a variável definida acima
                 const totalTaxasAquisicao = valorComissaoLeiloeiro + itbi + parseNum(d.registroCartorio) + parseNum(d.certidoesDocumentos) + parseNum(d.advogado) + parseNum(d.vistoriaTecnica) + parseNum(d.seguroGarantia);
                 
                 let custoReforma = 0;
@@ -369,11 +382,8 @@
                     const capitalTotalInvestido = investimentoInicial + custoManutencaoTotal + custoCarregamentoFinanceiro;
                     roi = capitalTotalInvestido > 0 ? (lucroLiquido / capitalTotalInvestido) * 100 : 0;
                 } else {
-                    const primeiraParcela = d.usarFinanciamento ? financiamentoSimulacao.firstInstallment : 0;
-                    const fluxoMensal = parseNum(d.valorAluguel) - primeiraParcela - parseNum(d.iptuMensal) - parseNum(d.condominioMensal);
-                    const rendaAnual = fluxoMensal * 12;
-                    
-                    lucroLiquido = rendaAnual;
+                    const rendaAnual = parseNum(d.valorAluguel) * 12;
+                    lucroLiquido = rendaAnual - (d.usarFinanciamento ? (financiamentoSimulacao.firstInstallment * 12) : 0);
                     roi = investimentoInicial > 0 ? (lucroLiquido / investimentoInicial) * 100 : 0;
                 }
 
@@ -398,7 +408,7 @@
                     corClassificacao,
                     custosVendaTotal: valorCorretagem + valorPublicidade,
                     tempoTotal: parseNum(d.tempoVenda) + parseNum(d.tempoReforma),
-                    valorComissaoLeiloeiro, // Retornando corretamente
+                    valorComissaoLeiloeiro,
                     valorFinanciado,
                     financiamentoSimulacao
                 };
@@ -408,29 +418,39 @@
                 const d = veiculoData;
                 const lance = parseNum(d.lancePretendido);
                 
-                // --- FIX: Cálculo correto também para veículos ---
+                // CORRIGIDO: Variável definida corretamente
                 const valorComissaoLeiloeiro = lance * (d.comissaoLeiloeiroPercent / 100);
                 
                 const totalArrematacao = valorComissaoLeiloeiro + parseNum(d.despesaAdministrativa) + parseNum(d.taxaTransferencia) + parseNum(d.vistoriaDocumentos) + parseNum(d.despachante);
                 
                 let custoReparo = d.necessitaReparo ? parseNum(d.custoReparo) : 0;
                 const outrosCustos = parseNum(d.outrosCustos);
-                let investimentoInicial = lance + totalArrematacao + custoReparo + outrosCustos;
-                let prestacao = 0;
-                let saldoDevedor = 0;
+                
+                // Base Fiscal para veículo: Lance + taxas + reparo + outros
+                const baseCustoFiscal = lance + totalArrematacao + custoReparo + outrosCustos;
+
+                let investimentoInicial = baseCustoFiscal;
+                let financiamentoSimulacao = { totalPaid: 0, outstandingBalance: 0, firstInstallment: 0 };
+                let valorFinanciado = 0;
+                let valorEntrada = 0;
 
                 if (d.usarFinanciamento) {
-                    const fin = calculateFinancing(lance, d.entradaPercent, d.taxaJuros, d.prazoFinanciamento);
-                    investimentoInicial = fin.entry + totalArrematacao + custoReparo + outrosCustos;
-                    prestacao = fin.payment;
-                    const taxaMensal = (d.taxaJuros / 100) / 12;
-                    saldoDevedor = fin.financed;
-                    for (let i = 0; i < d.tempoVenda; i++) {
-                        saldoDevedor = saldoDevedor * (1 + taxaMensal) - prestacao;
-                    }
+                    valorEntrada = lance * (d.entradaPercent / 100);
+                    valorFinanciado = lance - valorEntrada;
+                    
+                    financiamentoSimulacao = calculateAmortization(
+                        valorFinanciado,
+                        d.taxaJuros,
+                        d.prazoFinanciamento,
+                        d.sistemaAmortizacao,
+                        parseNum(d.tempoVenda),
+                        parseNum(d.carencia)
+                    );
+
+                    investimentoInicial = valorEntrada + totalArrematacao + custoReparo + outrosCustos + parseNum(d.custosBancarios);
                 }
 
-                const valorVendaEstimado = parseNum(d.valorMercado) * 0.95;
+                const valorVendaEstimado = parseNum(d.valorMercado); // Removida a margem fixa de 95%, usar valor cheio
                 const valorCorretagem = valorVendaEstimado * (d.corretagemPercent / 100);
                 const valorPublicidade = parseNum(d.publicidade);
                 
@@ -440,17 +460,18 @@
                 let ganhoCapitalBruto = 0;
 
                 if (d.estrategia === 'venda') {
-                    const baseCustoFiscal = lance + totalArrematacao + custoReparo + outrosCustos;
                     const valorVendaLiquido = valorVendaEstimado - valorCorretagem;
                     ganhoCapitalBruto = valorVendaLiquido - baseCustoFiscal;
                     
                     impostoGanhoCapital = ganhoCapitalBruto > 0 ? ganhoCapitalBruto * 0.15 : 0;
 
-                    const recebidoLiquido = valorVendaEstimado - valorCorretagem - valorPublicidade - impostoGanhoCapital - (d.usarFinanciamento ? saldoDevedor : 0);
-                    const parcelasPagas = d.usarFinanciamento ? (prestacao * d.tempoVenda) : 0;
+                    const custosVendaTotal = valorCorretagem + valorPublicidade + impostoGanhoCapital;
+                    const quitacaoFinanciamento = d.usarFinanciamento ? financiamentoSimulacao.outstandingBalance : 0;
+                    const custoCarregamentoFinanceiro = d.usarFinanciamento ? financiamentoSimulacao.totalPaid : 0;
                     
-                    lucroLiquido = recebidoLiquido - investimentoInicial - parcelasPagas;
-                    const capitalInvestido = investimentoInicial + parcelasPagas;
+                    lucroLiquido = valorVendaEstimado - custosVendaTotal - quitacaoFinanciamento - investimentoInicial - custoCarregamentoFinanceiro;
+                    
+                    const capitalInvestido = investimentoInicial + custoCarregamentoFinanceiro;
                     roi = capitalInvestido > 0 ? (lucroLiquido / capitalInvestido) * 100 : 0;
                 } else {
                     const rendaAnual = parseNum(d.valorAluguel) * 12;
@@ -466,7 +487,7 @@
                 else if (roi > 0) { classificacao = 'Atenção'; corClassificacao = 'text-yellow-600 bg-yellow-100'; }
 
                 return {
-                    baseCustoFiscal: lance + totalArrematacao + custoReparo + outrosCustos,
+                    baseCustoFiscal,
                     valorVendaEstimado,
                     valorCorretagem,
                     ganhoCapitalBruto,
@@ -477,7 +498,10 @@
                     classificacao,
                     corClassificacao,
                     custosVendaTotal: valorCorretagem + valorPublicidade,
-                    tempoTotal: (parseNum(d.tempoReparo)/30) + parseNum(d.tempoVenda)
+                    tempoTotal: (parseNum(d.tempoReparo)/30) + parseNum(d.tempoVenda),
+                    valorComissaoLeiloeiro,
+                    valorFinanciado,
+                    financiamentoSimulacao
                 };
             }, [veiculoData]);
 
@@ -606,10 +630,11 @@
                                     <select name="sistemaAmortizacao" value={imovelData.sistemaAmortizacao} onChange={handleImovelChange} className="w-full border p-2 rounded h-11 bg-white">
                                         <option value="sac">SAC (Decrescente)</option>
                                         <option value="price">Price (Fixa)</option>
+                                        <option value="cdc">CDC (Crédito Direto)</option>
                                     </select>
                                 </InputGroup>
                                 <InputGroup label="Custos Bancários (Avaliação)">
-                                    <CurrencyInput name="custosBancarios" value={imovelData.custosBancarios} onChange={handleImovelChange} className="h-11" />
+                                    <CurrencyInput name="custosBancarios" value={imovelData.custosBancarios} onChange={handleImovelChange} className="h-11" readOnly={imovelData.sistemaAmortizacao === 'cdc'} />
                                 </InputGroup>
                                 <InputGroup label="Carência (Meses)" subtext="Meses pagando só juros">
                                     <input type="number" name="carencia" value={imovelData.carencia} onChange={handleImovelChange} className="w-full border p-2 rounded h-11" />
@@ -733,8 +758,8 @@
                                             <span>{formatCurrency(imovelResults.baseCustoFiscal - (parseNum(imovelData.lancePretendido) + imovelResults.valorComissaoLeiloeiro))}</span>
                                         </div>
                                     </div>
-                                    <div className="flex justify-between text-red-300">
-                                        <span>(-) Corretagem (Dedutível)</span>
+                                    <div className="flex justify-between text-red-300 border-b border-slate-700 pb-1">
+                                        <span>(-) Corretagem ({imovelData.corretagemPercent}%)</span>
                                         <span>- {formatCurrency(imovelResults.valorCorretagem)}</span>
                                     </div>
                                     <div className="flex justify-between border-t border-slate-600 pt-1 font-bold text-white">
@@ -778,10 +803,222 @@
                 </div>
             );
 
-            // Render Veículos mantido simples para focar no imóvel
+            // RENDERIZAÇÃO DO FORMULÁRIO DE VEÍCULOS (REATIVADO)
             const renderVeiculosForm = () => (
-                <div className="text-center p-10 text-gray-500">
-                    Módulo de Veículos simplificado nesta versão Pro Imóveis.
+                <div className="space-y-8 animate-in">
+                    <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                        <SectionHeader title="Dados do Veículo" icon={Icons.Car} />
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <InputGroup label="Marca/Modelo" id="marcaModelo">
+                                <input type="text" name="marcaModelo" value={veiculoData.marcaModelo} onChange={handleVeiculoChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border h-11" placeholder="Ex: Honda Civic..." />
+                            </InputGroup>
+                            <div className="grid grid-cols-2 gap-4">
+                                <InputGroup label="Ano Fab." id="anoFabricacao">
+                                    <input type="number" name="anoFabricacao" value={veiculoData.anoFabricacao} onChange={handleVeiculoChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border h-11" />
+                                </InputGroup>
+                                <InputGroup label="KM" id="quilometragem">
+                                    <input type="number" name="quilometragem" value={veiculoData.quilometragem} onChange={handleVeiculoChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border h-11" />
+                                </InputGroup>
+                            </div>
+                            <InputGroup label="Tabela FIPE" id="valorFipe">
+                                <CurrencyInput name="valorFipe" value={veiculoData.valorFipe} onChange={handleVeiculoChange} className="h-11" />
+                            </InputGroup>
+                            <InputGroup label="Valor de Revenda Real" id="valorMercado" required subtext="Pesquise na WebMotors/OLX">
+                                <CurrencyInput name="valorMercado" value={veiculoData.valorMercado} onChange={handleVeiculoChange} className="h-11" />
+                            </InputGroup>
+                            
+                            <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-100 col-span-1 md:col-span-2 lg:col-span-2">
+                                <InputGroup label="LANCE MÁXIMO (TETO)" id="lancePretendido" required>
+                                    <CurrencyInput name="lancePretendido" value={veiculoData.lancePretendido} onChange={handleVeiculoChange} className="h-11" />
+                                </InputGroup>
+                                <div className="flex gap-4 mt-2 text-xs text-indigo-700">
+                                    <span>Desconto FIPE: {veiculoData.valorFipe && veiculoData.lancePretendido ? ((veiculoData.valorFipe - veiculoData.lancePretendido)/veiculoData.valorFipe * 100).toFixed(1) + '%' : '0%'}</span>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 items-start">
+                                <InputGroup label="Estratégia" id="estrategia" subtext="Defina o objetivo">
+                                    <select name="estrategia" value={veiculoData.estrategia} onChange={handleVeiculoChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border h-11 bg-white">
+                                        <option value="venda">Revenda</option>
+                                        <option value="aluguel">Aluguel</option>
+                                    </select>
+                                </InputGroup>
+                                <InputGroup label="Prazo Venda (Meses)" id="tempoVenda" subtext="Impacta manutenção e financiamento">
+                                    <input type="number" name="tempoVenda" value={veiculoData.tempoVenda} onChange={handleVeiculoChange} className="w-full border-gray-300 rounded-md shadow-sm p-2 border h-11" />
+                                </InputGroup>
+                            </div>
+
+                            {veiculoData.estrategia === 'aluguel' && (
+                                <InputGroup label="Valor Aluguel Mensal" id="valorAluguel">
+                                    <CurrencyInput name="valorAluguel" value={veiculoData.valorAluguel} onChange={handleVeiculoChange} className="h-11" />
+                                </InputGroup>
+                            )}
+                        </div>
+                    </section>
+
+                    {/* SEÇÃO DE FINANCIAMENTO PARA VEÍCULOS */}
+                    <section className="bg-blue-50 p-6 rounded-xl border border-blue-200 shadow-sm">
+                        <div className="flex justify-between items-center mb-4">
+                            <SectionHeader title="Alavancagem / Financiamento" icon={Icons.Bank} />
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <span className="text-sm font-medium text-blue-900">Simular Financiamento?</span>
+                                <input type="checkbox" name="usarFinanciamento" checked={veiculoData.usarFinanciamento} onChange={handleVeiculoChange} className="w-5 h-5 text-indigo-600 rounded" />
+                            </label>
+                        </div>
+
+                        {veiculoData.usarFinanciamento && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-in">
+                                <InputGroup label="Entrada Mínima (%)">
+                                    <input type="number" name="entradaPercent" value={veiculoData.entradaPercent} onChange={handleVeiculoChange} className="w-full border p-2 rounded h-11" />
+                                </InputGroup>
+                                <InputGroup label="Taxa Juros Anual (%)">
+                                    <input type="number" name="taxaJuros" value={veiculoData.taxaJuros} onChange={handleVeiculoChange} className="w-full border p-2 rounded h-11" placeholder="Ex: 18.0" />
+                                </InputGroup>
+                                <InputGroup label="Prazo Total (Meses)">
+                                    <input type="number" name="prazoFinanciamento" value={veiculoData.prazoFinanciamento} onChange={handleVeiculoChange} className="w-full border p-2 rounded h-11" />
+                                </InputGroup>
+                                <InputGroup label="Sistema Amortização">
+                                    <select name="sistemaAmortizacao" value={veiculoData.sistemaAmortizacao} onChange={handleVeiculoChange} className="w-full border p-2 rounded h-11 bg-white">
+                                        <option value="cdc">CDC (Crédito Direto)</option>
+                                        <option value="price">Price (Fixa)</option>
+                                        <option value="sac">SAC (Decrescente)</option>
+                                    </select>
+                                </InputGroup>
+                                <InputGroup label="Custos Bancários">
+                                    <CurrencyInput name="custosBancarios" value={veiculoData.custosBancarios} onChange={handleVeiculoChange} className="h-11" readOnly={veiculoData.sistemaAmortizacao === 'cdc'} />
+                                </InputGroup>
+                                <InputGroup label="Carência (Meses)" subtext="Meses pagando só juros">
+                                    <input type="number" name="carencia" value={veiculoData.carencia} onChange={handleVeiculoChange} className="w-full border p-2 rounded h-11" />
+                                </InputGroup>
+                                <div className="md:col-span-2 bg-white p-3 rounded border border-blue-100 flex flex-col justify-center">
+                                    <p className="text-sm text-blue-800">
+                                        Valor Financiado: <strong>{formatCurrency(veiculoResults.valorFinanciado)}</strong>
+                                    </p>
+                                    <p className="text-xs text-blue-600 mt-1">
+                                        Simulação de custo até a venda ({veiculoData.tempoVenda} meses): 
+                                        <strong> {formatCurrency(veiculoResults.financiamentoSimulacao.totalPaid)}</strong> pagos.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                    </section>
+
+                    <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                        <SectionHeader title="Custos e Reparos" icon={Icons.Hammer} />
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="col-span-full mb-2">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" name="necessitaReparo" checked={veiculoData.necessitaReparo} onChange={handleVeiculoChange} className="w-4 h-4 text-indigo-600 rounded" />
+                                    <span className="font-medium text-gray-700">Necessita Mecânica/Funilaria?</span>
+                                </label>
+                            </div>
+                            {veiculoData.necessitaReparo && (
+                                <>
+                                    <InputGroup label="Custo Estimado">
+                                        <CurrencyInput name="custoReparo" value={veiculoData.custoReparo} onChange={handleVeiculoChange} className="h-11" />
+                                    </InputGroup>
+                                    <InputGroup label="Tempo Parado (dias)">
+                                        <input type="number" name="tempoReparo" value={veiculoData.tempoReparo} onChange={handleVeiculoChange} className="w-full border p-2 rounded h-11" />
+                                    </InputGroup>
+                                </>
+                            )}
+                            <InputGroup label="Despesas Pátio/Admin">
+                                <CurrencyInput name="despesaAdministrativa" value={veiculoData.despesaAdministrativa} onChange={handleVeiculoChange} className="h-11" />
+                            </InputGroup>
+                            <InputGroup label="Taxa Transferência">
+                                <CurrencyInput name="taxaTransferencia" value={veiculoData.taxaTransferencia} onChange={handleVeiculoChange} className="h-11" />
+                            </InputGroup>
+                            <InputGroup label="Vistoria/Docs">
+                                <CurrencyInput name="vistoriaDocumentos" value={veiculoData.vistoriaDocumentos} onChange={handleVeiculoChange} className="h-11" />
+                            </InputGroup>
+                            <InputGroup label="Despachante">
+                                <CurrencyInput name="despachante" value={veiculoData.despachante} onChange={handleVeiculoChange} className="h-11" />
+                            </InputGroup>
+                            <InputGroup label="Outros Custos">
+                                <CurrencyInput name="outrosCustos" value={veiculoData.outrosCustos} onChange={handleVeiculoChange} className="h-11" />
+                            </InputGroup>
+                            <InputGroup label="Comissão Leiloeiro (%)">
+                                <input type="number" name="comissaoLeiloeiroPercent" value={veiculoData.comissaoLeiloeiroPercent} onChange={handleVeiculoChange} className="w-full border p-2 rounded h-11" />
+                            </InputGroup>
+                            <InputGroup label="Comissão Corretor (%)">
+                                <input type="number" name="corretagemPercent" value={veiculoData.corretagemPercent} onChange={handleVeiculoChange} className="w-full border p-2 rounded h-11" />
+                            </InputGroup>
+                        </div>
+                    </section>
+
+                    <section className="bg-slate-900 text-white p-6 rounded-xl shadow-lg mt-8">
+                        <div className="flex items-center gap-3 mb-6">
+                            <span className="text-emerald-400"><Icons.BarChart3 /></span>
+                            <h2 className="text-xl font-bold">Resultado Financeiro (Veículo)</h2>
+                            <span className={`ml-auto px-4 py-1 rounded-full text-sm font-bold uppercase tracking-wider ${veiculoResults.corClassificacao}`}>
+                                {veiculoResults.classificacao}
+                            </span>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                            <div className="bg-slate-800 p-4 rounded-lg">
+                                <p className="text-slate-400 text-sm mb-1">Custo Total</p>
+                                <p className="text-2xl font-bold text-white">{formatCurrency(veiculoResults.investimentoInicial)}</p>
+                            </div>
+                            <div className="bg-slate-800 p-4 rounded-lg">
+                                <p className="text-slate-400 text-sm mb-1">Lucro Líquido</p>
+                                <p className={`text-2xl font-bold ${veiculoResults.lucroLiquido > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                    {formatCurrency(veiculoResults.lucroLiquido)}
+                                </p>
+                            </div>
+                            <div className="bg-slate-800 p-4 rounded-lg">
+                                <p className="text-slate-400 text-sm mb-1">ROI</p>
+                                <p className={`text-2xl font-bold ${veiculoResults.roi > 15 ? 'text-emerald-400' : 'text-yellow-400'}`}>
+                                    {veiculoResults.roi.toFixed(2)}%
+                                </p>
+                            </div>
+                            <div className="bg-slate-800 p-4 rounded-lg">
+                                <p className="text-slate-400 text-sm mb-1">Imposto (15%)</p>
+                                <p className="text-2xl font-bold text-red-300">{formatCurrency(veiculoResults.impostoGanhoCapital)}</p>
+                            </div>
+                        </div>
+
+                        {veiculoData.estrategia === 'venda' && (
+                            <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 mb-6">
+                                <div className="flex items-center gap-2 mb-4 text-emerald-400">
+                                    <Icons.Info />
+                                    <h3 className="font-bold">Entenda o Cálculo do Imposto (15%)</h3>
+                                </div>
+                                <div className="space-y-2 text-sm text-slate-300">
+                                    <div className="flex justify-between border-b border-slate-700 pb-1">
+                                        <span>Valor de Venda</span>
+                                        <span>{formatCurrency(veiculoResults.valorVendaEstimado)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-red-300">
+                                        <span>(-) Custo de Aquisição & Reparos</span>
+                                        <span>- {formatCurrency(veiculoResults.baseCustoFiscal)}</span>
+                                    </div>
+                                    <div className="pl-4 text-xs text-slate-400">
+                                        <div className="flex justify-between">
+                                            <span>Lance + Comissão Leiloeiro ({veiculoData.comissaoLeiloeiroPercent}%)</span>
+                                            <span>{formatCurrency(parseNum(veiculoData.lancePretendido) + veiculoResults.valorComissaoLeiloeiro)}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span>Taxas (Admin, Transf, Docs) + Reparo</span>
+                                            <span>{formatCurrency(veiculoResults.baseCustoFiscal - (parseNum(veiculoData.lancePretendido) + veiculoResults.valorComissaoLeiloeiro))}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-between text-red-300 border-b border-slate-700 pb-1">
+                                        <span>(-) Corretagem ({veiculoData.corretagemPercent}%)</span>
+                                        <span>- {formatCurrency(veiculoResults.valorCorretagem)}</span>
+                                    </div>
+                                    <div className="flex justify-between border-t border-slate-600 pt-1 font-bold text-white">
+                                        <span>(=) Lucro Tributável (Base de Cálculo)</span>
+                                        <span>{formatCurrency(veiculoResults.ganhoCapitalBruto)}</span>
+                                    </div>
+                                    <div className="flex justify-between pt-1 text-red-400 font-bold">
+                                        <span>(x) Alíquota 15% (A Pagar)</span>
+                                        <span>{formatCurrency(veiculoResults.impostoGanhoCapital)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </section>
                 </div>
             );
 
@@ -814,16 +1051,20 @@
                                 >
                                     <Icons.Building2 /> Imóveis
                                 </button>
-                                {/* Veículos desativado temporariamente para focar na lógica imobiliária complexa */}
                                 <button
-                                    className="flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-semibold text-gray-300 cursor-not-allowed"
+                                    onClick={() => setActiveTab('veiculos')}
+                                    className={`flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-semibold transition-all ${
+                                        activeTab === 'veiculos' 
+                                        ? 'bg-indigo-600 text-white shadow-md transform scale-105' 
+                                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                                    }`}
                                 >
-                                    <Icons.Car /> Veículos (Em breve)
+                                    <Icons.Car /> Veículos
                                 </button>
                             </div>
                         </div>
 
-                        {activeTab === 'imoveis' && renderImoveisForm()}
+                        {activeTab === 'imoveis' ? renderImoveisForm() : renderVeiculosForm()}
                     </main>
                     
                     <footer className="text-center text-gray-400 text-sm py-8 border-t border-gray-200 mt-8">
